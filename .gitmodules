@@ -1,0 +1,3 @@
+[submodule "cgdk"]
+	path = cgdk
+	url = git@github.com:elsid/CodeCraft-cgdk.git
