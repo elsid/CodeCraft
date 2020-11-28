@@ -11,6 +11,9 @@ impl MyStrategy {
         player_view: &model::PlayerView,
         debug_interface: Option<&mut DebugInterface>,
     ) -> model::Action {
+        if player_view.current_tick == 0 {
+            println!("{}", serde_json::to_string(&player_view).unwrap());
+        }
         model::Action {
             entity_actions: std::collections::HashMap::new(),
         }
