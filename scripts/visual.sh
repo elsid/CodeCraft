@@ -16,4 +16,10 @@ fi
 
 cd cgdk/runners/${RUNNER}/
 
-./aicup2020 --config ${SRC}/etc/${CONFIG:?}.json
+ID=$(date +%Y-%m-%d_%H-%M-%S)
+
+mkdir -p ${SRC}/results/temp
+
+./aicup2020 \
+    --config ${SRC}/etc/${CONFIG:?}.json \
+    --save-results ${SRC}/results/temp/${ID}.results.json
