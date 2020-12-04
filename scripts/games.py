@@ -41,6 +41,8 @@ def run(players, game_type, runner_bin_path, start_port, workers, max_runs, pref
     scheduler = Scheduler(workers_number=workers, verbose=verbose, timeout=timeout)
     scheduler.start()
     for number in range(max_runs):
+        if verbose:
+            print(f'{max_runs - number - 1} tasks is left')
         scheduler.put_task(Task(
             runner=Runner(
                 bin_path=runner_bin_path,
@@ -169,8 +171,6 @@ def run_worker(task_queue, port_shift, stop, verbose, timeout):
                 traceback.print_exc()
             finally:
                 task_queue.task_done()
-                if verbose:
-                    print(f'{task_queue.qsize()} tasks is left')
         except queue.Empty:
             pass
     if verbose:
@@ -239,7 +239,9 @@ def run_player(bin_path, port, verbose, stop, timeout):
             )
             if not wait_process(process=process, stop=stop, timeout=timeout, verbose=verbose):
                 break
-            if process.returncode == 0 or process.returncode == -2:
+            if process.returncode == 0:
+                return
+            if process.returncode == -2:
                 break
             fails += 1
             time.sleep(min(1.0, fails * 0.1))
@@ -248,6 +250,8 @@ def run_player(bin_path, port, verbose, stop, timeout):
         except:
             traceback.print_exc()
             break
+    if verbose:
+        print(f'Worker {port} has failed')
 
 
 def wait_process(process, stop, timeout, verbose):
