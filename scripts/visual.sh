@@ -8,9 +8,9 @@ SRC="${PWD}"
 
 if ! [[ "${RUNNER}" ]]; then
   if [[ ${OS} == "Windows_NT" ]]; then
-    RUNNER=windows
+    RUNNER=aicup2020-windows
   else
-    RUNNER=linux
+    RUNNER=aicup2020-linux
   fi
 fi
 
