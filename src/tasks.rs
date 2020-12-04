@@ -1,20 +1,25 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
+#[cfg(feature = "enable_debug")]
 use model::{
     Color,
     ColoredVertex,
     DebugCommand,
     DebugData,
     DebugState,
-    EntityType,
 };
+use model::EntityType;
 
+#[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
-use crate::my_strategy::{Group, GroupState, Positionable, Role, Tile, Vec2f, Vec2i, World};
+use crate::my_strategy::{Group, GroupState, Positionable, Role, Tile, Vec2i, World};
+#[cfg(feature = "enable_debug")]
+use crate::my_strategy::Vec2f;
 
 pub const TARGET_BUILDERS_COUNT: usize = 60;
 pub const INITIAL_BUILDERS_COUNT: usize = 10;
 
+#[derive(Debug)]
 pub struct TaskManager {
     next_task_id: usize,
     tasks: HashMap<usize, Task>,
@@ -60,6 +65,7 @@ impl TaskManager {
         self.tasks.retain(|v, _| !done.contains(v));
     }
 
+    #[cfg(feature = "enable_debug")]
     pub fn debug_update(&mut self, state: &DebugState, debug: &mut DebugInterface) {
         debug.send(DebugCommand::Add {
             data: DebugData::PlacedText {
@@ -121,7 +127,7 @@ impl TaskManager {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct TasksCount {
     pub harvest_resources: usize,
     pub build_units: usize,

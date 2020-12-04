@@ -1,16 +1,21 @@
 use std::iter::repeat;
 
+#[cfg(feature = "enable_debug")]
 use model::{
     Color,
     DebugCommand,
     DebugData,
-    PlayerView,
     PrimitiveType,
 };
+use model::PlayerView;
 
+#[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
-use crate::my_strategy::{Positionable, Vec2f, Vec2i};
+use crate::my_strategy::{Positionable, Vec2i};
+#[cfg(feature = "enable_debug")]
 use crate::my_strategy::debug;
+#[cfg(feature = "enable_debug")]
+use crate::my_strategy::Vec2f;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Tile {
@@ -142,6 +147,7 @@ impl Map {
         }
     }
 
+    #[cfg(feature = "enable_debug")]
     pub fn debug_update(&self, debug: &mut DebugInterface) {
         let mut vertices = Vec::new();
         self.visit(|position, tile, locked| {

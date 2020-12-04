@@ -9,6 +9,7 @@ use model::{
     PlayerView,
 };
 
+#[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
 use crate::my_strategy::{
     is_entity_base,
@@ -356,6 +357,7 @@ impl World {
         self.map.borrow_mut().unlock_square(position, size);
     }
 
+    #[cfg(feature = "enable_debug")]
     pub fn debug_update(&self, debug: &mut DebugInterface) {
         self.map.borrow().debug_update(debug);
     }

@@ -1,20 +1,27 @@
-use std::collections::{BTreeMap, HashMap};
+#[cfg(feature = "enable_debug")]
 use std::collections::btree_map;
+#[cfg(feature = "enable_debug")]
+use std::collections::BTreeMap;
 use std::collections::hash_map;
+use std::collections::HashMap;
 
 use model::{
     Action,
+    EntityAction,
+    EntityType,
+    PlayerView,
+};
+#[cfg(feature = "enable_debug")]
+use model::{
     Color,
     ColoredVertex,
     DebugCommand,
     DebugData,
     DebugState,
-    EntityAction,
-    EntityType,
-    PlayerView,
     PrimitiveType,
 };
 
+#[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
 use crate::my_strategy::{
     Group,
@@ -26,10 +33,14 @@ use crate::my_strategy::{
     Stats,
     Task,
     TaskManager,
-    Vec2f,
-    Vec2i,
     World,
 };
+#[cfg(feature = "enable_debug")]
+use crate::my_strategy::{
+    Vec2f,
+    Vec2i,
+};
+#[cfg(feature = "enable_debug")]
 use crate::my_strategy::debug;
 
 pub struct Bot {
@@ -64,6 +75,7 @@ impl Bot {
         Action { entity_actions: result }
     }
 
+    #[cfg(feature = "enable_debug")]
     pub fn debug_update(&mut self, state: &DebugState, debug: &mut DebugInterface) {
         self.world.debug_update(debug);
         self.debug_update_start_position(debug);
@@ -269,6 +281,7 @@ impl Bot {
         }
     }
 
+    #[cfg(feature = "enable_debug")]
     fn debug_update_entities(&mut self, debug: &mut DebugInterface) {
         let mut line_vertices = Vec::new();
         for entity in self.world.my_entities() {
@@ -351,6 +364,7 @@ impl Bot {
         });
     }
 
+    #[cfg(feature = "enable_debug")]
     fn debug_update_start_position(&mut self, debug: &mut DebugInterface) {
         let start_position = self.world.start_position();
         debug.send(DebugCommand::Add {
@@ -382,6 +396,7 @@ impl Bot {
         });
     }
 
+    #[cfg(feature = "enable_debug")]
     fn debug_update_resources(&mut self, state: &DebugState, debug: &mut DebugInterface) {
         let allocated = self.world.allocated_resource();
         let requested = self.world.requested_resource();
@@ -399,6 +414,7 @@ impl Bot {
         });
     }
 
+    #[cfg(feature = "enable_debug")]
     fn debug_update_population(&mut self, state: &DebugState, debug: &mut DebugInterface) {
         debug.send(DebugCommand::Add {
             data: DebugData::PlacedText {
@@ -414,6 +430,7 @@ impl Bot {
         });
     }
 
+    #[cfg(feature = "enable_debug")]
     fn debug_update_entities_stats(&mut self, state: &DebugState, debug: &mut DebugInterface) {
         let mut count_by_entity_type: BTreeMap<String, usize> = BTreeMap::new();
         for entity in self.world.my_entities() {
@@ -454,6 +471,7 @@ impl Bot {
         }
     }
 
+    #[cfg(feature = "enable_debug")]
     fn debug_update_groups(&mut self, debug: &mut DebugInterface) {
         let mut triangle_vertices = Vec::new();
         let mut line_vertices = Vec::new();

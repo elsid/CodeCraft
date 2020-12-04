@@ -29,6 +29,7 @@ pub use world::*;
 
 use super::DebugInterface;
 
+#[cfg(feature = "enable_debug")]
 #[path = "debug.rs"]
 pub mod debug;
 
@@ -97,6 +98,14 @@ impl MyStrategy {
             })
     }
 
+    #[cfg(not(feature = "enable_debug"))]
+    pub fn debug_update(
+        &mut self,
+        _player_view: &model::PlayerView,
+        _debug_interface: &mut DebugInterface,
+    ) {}
+
+    #[cfg(feature = "enable_debug")]
     pub fn debug_update(
         &mut self,
         _player_view: &model::PlayerView,

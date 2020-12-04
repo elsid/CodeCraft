@@ -1,6 +1,6 @@
-mod my_strategy;
-
 use my_strategy::MyStrategy;
+
+mod my_strategy;
 
 struct Args {
     host: String,
