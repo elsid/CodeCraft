@@ -27,7 +27,7 @@ def check_game(game, player):
         print('loss', seed, place, results[player]['position'], results[player]['score'])
     for k, v in results.items():
         if v['crashed']:
-            print('crashed', k, seed, place, results[player]['position'], results[player]['score'])
+            print('crashed', k, seed, place, v['position'], v['score'])
 
 
 def get_time(path):
