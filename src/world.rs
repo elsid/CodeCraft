@@ -405,7 +405,12 @@ impl World {
     }
 
     pub fn get_entity_cost(&self, entity_type: &EntityType) -> i32 {
-        self.entity_properties[entity_type].initial_cost + self.my_entities_count[entity_type] as i32
+        let properties = &self.entity_properties[entity_type];
+        properties.initial_cost + if properties.can_move {
+            self.my_entities_count[entity_type] as i32
+        } else {
+            0
+        }
     }
 
     pub fn is_attacked_by_opponents(&self, position: Vec2i) -> bool {
