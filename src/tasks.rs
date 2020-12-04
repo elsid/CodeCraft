@@ -10,7 +10,7 @@ use model::{
 };
 
 use crate::DebugInterface;
-use crate::my_strategy::{Group, GroupState, GroupStatus, Positionable, Role, Tile, Vec2f, Vec2i, World};
+use crate::my_strategy::{Group, GroupState, Positionable, Role, Tile, Vec2f, Vec2i, World};
 
 pub const TARGET_BUILDERS_COUNT: usize = 60;
 pub const INITIAL_BUILDERS_COUNT: usize = 10;

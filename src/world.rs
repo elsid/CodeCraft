@@ -39,6 +39,7 @@ pub struct World {
     requested_resource: RefCell<i32>,
     allocated_resource: RefCell<i32>,
     allocated_population: RefCell<i32>,
+    protected_radius: RefCell<Option<i32>>,
 }
 
 impl World {
@@ -67,6 +68,7 @@ impl World {
             requested_resource: RefCell::new(0),
             allocated_resource: RefCell::new(0),
             allocated_population: RefCell::new(0),
+            protected_radius: RefCell::new(None),
         }
     }
 
@@ -92,6 +94,7 @@ impl World {
         *self.base_size.borrow_mut() = None;
         *self.allocated_resource.borrow_mut() = 0;
         *self.allocated_population.borrow_mut() = 0;
+        *self.protected_radius.borrow_mut() = None;
     }
 
     pub fn my_id(&self) -> i32 {
@@ -416,20 +419,25 @@ impl World {
 
     pub fn distance_to_nearest_opponent(&self, position: Vec2i) -> Option<i32> {
         self.opponent_entities()
-            .filter_map(|entity| {
-                self.entity_properties[&entity.entity_type].attack.as_ref()
-                    .map(|v| entity.position().distance(position))
-            })
+            .filter(|entity| self.entity_properties[&entity.entity_type].attack.is_some())
+            .map(|entity| entity.position().distance(position))
             .min()
     }
 
-    pub fn is_inside_protected_perimeter(&self, position: Vec2i) -> bool {
-        self.my_entities()
+    pub fn get_protected_radius(&self) -> i32 {
+        if let Some(v) = *self.protected_radius.borrow() {
+            return v;
+        }
+        let result = self.my_entities()
             .filter(|v| is_protected_entity_type(&v.entity_type))
             .map(|v| v.position().distance(self.start_position) + self.entity_properties[&v.entity_type].sight_range)
-            .max()
-            .map(|protected_radius| position.distance(self.start_position) <= protected_radius)
-            .unwrap_or(false)
+            .max();
+        *self.protected_radius.borrow_mut() = result;
+        result.unwrap_or(0)
+    }
+
+    pub fn is_inside_protected_perimeter(&self, position: Vec2i) -> bool {
+        position.distance(self.start_position) <= self.get_protected_radius()
     }
 
     pub fn has_active_base_for(&self, entity_type: &EntityType) -> bool {
