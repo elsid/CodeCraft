@@ -226,6 +226,8 @@ def handle_task(task, port_shift, verbose, stop, timeout):
 
 
 def run_player(bin_path, port, verbose, stop, timeout):
+    env = os.environ.copy()
+    env['RUST_BACKTRACE'] = '1'
     args = [os.path.abspath(bin_path), '127.0.0.1', str(port)]
     fails = 0
     while fails < 3 and not stop.is_set():
@@ -233,6 +235,7 @@ def run_player(bin_path, port, verbose, stop, timeout):
             if verbose:
                 print('Run', *args)
             process = subprocess.Popen(
+                env=env,
                 args=args,
                 stdout=None if verbose else subprocess.DEVNULL,
                 stderr=None if verbose else subprocess.DEVNULL,
