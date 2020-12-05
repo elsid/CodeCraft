@@ -22,6 +22,7 @@ pub enum Tile {
     Unknown,
     Empty,
     Entity(i32),
+    Outside,
 }
 
 pub struct Map {
@@ -95,10 +96,14 @@ impl Map {
     }
 
     pub fn lock_square(&mut self, position: Vec2i, size: i32) {
-        visit_square(position, size, self.size as i32, |tile_position| {
-            self.lock_tile(tile_position);
-            true
-        });
+        find_inside_rect(
+            position.highest(Vec2i::zero()),
+            (position + Vec2i::both(size)).lowest(Vec2i::both(self.size as i32)),
+            |tile_position| {
+                self.lock_tile(tile_position);
+                false
+            },
+        );
     }
 
     pub fn unlock_tile(&mut self, position: Vec2i) {
@@ -107,67 +112,97 @@ impl Map {
     }
 
     pub fn unlock_square(&mut self, position: Vec2i, size: i32) {
-        visit_square(position, size, self.size as i32, |tile_position| {
-            self.unlock_tile(tile_position);
-            true
-        });
+        find_inside_rect(
+            position.highest(Vec2i::zero()),
+            (position + Vec2i::both(size)).lowest(Vec2i::both(self.size as i32)),
+            |tile_position| {
+                self.unlock_tile(tile_position);
+                false
+            },
+        );
     }
 
     fn get_tile_index(&self, position: Vec2i) -> usize {
         position.x() as usize + position.y() as usize * self.size
     }
 
-    pub fn is_empty_square(&self, position: Vec2i, size: i32) -> bool {
-        visit_square(position, size, self.size as i32, |tile_position| {
-            matches!(self.get_tile(tile_position), Tile::Empty)
-        })
+    pub fn find_inside_square<F: FnMut(Vec2i, Tile, bool) -> bool>(&self, position: Vec2i, size: i32, mut f: F) -> Option<Vec2i> {
+        find_inside_rect(
+            position,
+            position + Vec2i::both(size),
+            |tile_position| {
+                let (tile, locked) = if self.contains(tile_position) {
+                    (self.get_tile(tile_position), self.is_tile_locked(tile_position))
+                } else {
+                    (Tile::Outside, false)
+                };
+                f(tile_position, tile, locked)
+            },
+        )
     }
 
-    pub fn is_free_square(&self, position: Vec2i, size: i32) -> bool {
-        visit_square(position, size, self.size as i32, |tile_position| {
-            !self.is_tile_locked(tile_position) && matches!(self.get_tile(tile_position), Tile::Empty)
-        })
+    pub fn find_inside_square_within_map<F: FnMut(Vec2i, Tile, bool) -> bool>(&self, position: Vec2i, size: i32, mut f: F) -> Option<Vec2i> {
+        find_inside_rect(
+            position.highest(Vec2i::zero()),
+            (position + Vec2i::both(size)).lowest(Vec2i::both(self.size as i32)),
+            |tile_position| {
+                f(tile_position, self.get_tile(tile_position), self.is_tile_locked(tile_position))
+            },
+        )
     }
 
-    pub fn visit_neighbours<F: FnMut(Vec2i, Tile, bool) -> bool>(&self, position: Vec2i, size: i32, mut f: F) -> Option<Vec2i> {
-        visit_neighbours(position, size, self.size as i32, move |tile_position| {
-            f(tile_position, self.get_tile(tile_position), self.is_tile_locked(tile_position))
-        })
+    pub fn find_neighbour<F: FnMut(Vec2i, Tile, bool) -> bool>(&self, position: Vec2i, size: i32, mut f: F) -> Option<Vec2i> {
+        find_neighbour(
+            position,
+            size,
+            |tile_position| {
+                self.contains(tile_position) &&
+                    f(tile_position, self.get_tile(tile_position), self.is_tile_locked(tile_position))
+            },
+        )
     }
 
-    pub fn visit_square_border<F: FnMut(Vec2i, Tile, bool) -> bool>(&self, position: Vec2i, size: i32, mut f: F) -> Option<Vec2i> {
-        visit_square_border(position, size, self.size as i32, move |tile_position| {
-            f(tile_position, self.get_tile(tile_position), self.is_tile_locked(tile_position))
-        })
-    }
-
-    pub fn visit<F: FnMut(Vec2i, Tile, bool)>(&self, mut f: F) {
-        for i in 0..self.tiles.len() {
-            f(Vec2i::new((i % self.size) as i32, (i / self.size) as i32), self.tiles[i], self.locked[i]);
-        }
+    pub fn find_on_square_border<F: FnMut(Vec2i, Tile, bool) -> bool>(&self, position: Vec2i, size: i32, mut f: F) -> Option<Vec2i> {
+        find_on_rect_border(
+            position,
+            position + Vec2i::both(size),
+            |tile_position| {
+                let (tile, locked) = if self.contains(tile_position) {
+                    (self.get_tile(tile_position), self.is_tile_locked(tile_position))
+                } else {
+                    (Tile::Outside, false)
+                };
+                f(tile_position, tile, locked)
+            },
+        )
     }
 
     #[cfg(feature = "enable_debug")]
     pub fn debug_update(&self, debug: &mut DebugInterface) {
         let mut vertices = Vec::new();
-        self.visit(|position, tile, locked| {
-            let color = match tile {
-                Tile::Empty => Some(Color { a: 0.15, r: 0.0, g: 1.0, b: 1.0 }),
-                Tile::Entity(..) => Some(Color { a: 0.25, r: 1.0, g: 0.0, b: 1.0 }),
-                _ => None,
-            };
-            if let Some(color) = color {
-                debug::add_world_square(Vec2f::from(position), 1.0, color, &mut vertices);
-            }
-            if locked {
-                debug::add_world_square(
-                    Vec2f::from(position),
-                    1.0,
-                    Color { a: 0.5, r: 0.5, g: 0.0, b: 0.0 },
-                    &mut vertices,
-                );
-            }
-        });
+        find_inside_rect(
+            Vec2i::zero(),
+            Vec2i::both(self.size as i32),
+            |position| {
+                let color = match self.get_tile(position) {
+                    Tile::Empty => Some(Color { a: 0.15, r: 0.0, g: 1.0, b: 1.0 }),
+                    Tile::Entity(..) => Some(Color { a: 0.25, r: 1.0, g: 0.0, b: 1.0 }),
+                    _ => None,
+                };
+                if let Some(color) = color {
+                    debug::add_world_square(Vec2f::from(position), 1.0, color, &mut vertices);
+                }
+                if self.is_tile_locked(position) {
+                    debug::add_world_square(
+                        Vec2f::from(position),
+                        1.0,
+                        Color { a: 0.5, r: 0.5, g: 0.0, b: 0.0 },
+                        &mut vertices,
+                    );
+                }
+                false
+            },
+        );
         debug.send(DebugCommand::Add {
             data: DebugData::Primitives {
                 vertices,
@@ -177,35 +212,39 @@ impl Map {
     }
 }
 
-pub fn visit_neighbours<F: FnMut(Vec2i) -> bool>(position: Vec2i, size: i32, max_size: i32, mut f: F) -> Option<Vec2i> {
-    if position.x() > 0 {
-        for y in position.y()..position.y() + size {
-            let tile_position = Vec2i::new(position.x() - 1, y);
-            if !f(tile_position) {
-                return Some(tile_position);
-            }
+pub fn find_neighbour<F: FnMut(Vec2i) -> bool>(position: Vec2i, size: i32, mut f: F) -> Option<Vec2i> {
+    for y in position.y()..position.y() + size {
+        let tile_position = Vec2i::new(position.x() - 1, y);
+        if f(tile_position) {
+            return Some(tile_position);
         }
     }
-    if position.y() + size < max_size {
-        for x in position.x()..position.x() + size {
-            let tile_position = Vec2i::new(x, position.y() + size);
-            if !f(tile_position) {
-                return Some(tile_position);
-            }
+    for x in position.x()..position.x() + size {
+        let tile_position = Vec2i::new(x, position.y() + size);
+        if f(tile_position) {
+            return Some(tile_position);
         }
     }
-    if position.x() + size < max_size {
-        for y in position.y()..position.y() + size {
-            let tile_position = Vec2i::new(position.x() + size, y);
-            if !f(tile_position) {
-                return Some(tile_position);
-            }
+    for y in position.y()..position.y() + size {
+        let tile_position = Vec2i::new(position.x() + size, y);
+        if f(tile_position) {
+            return Some(tile_position);
         }
     }
-    if position.y() > 0 {
-        for x in position.x()..position.x() + size {
-            let tile_position = Vec2i::new(x, position.y() - 1);
-            if !f(tile_position) {
+    for x in position.x()..position.x() + size {
+        let tile_position = Vec2i::new(x, position.y() - 1);
+        if f(tile_position) {
+            return Some(tile_position);
+        }
+    }
+    None
+}
+
+pub fn find_inside_rect<F: FnMut(Vec2i) -> bool>(min: Vec2i, max: Vec2i, mut f: F) -> Option<Vec2i> {
+    for y in min.y()..max.y() {
+        for x in min.x()..max.x() {
+            let tile_position = Vec2i::new(x, y);
+            if f(tile_position) {
                 return Some(tile_position);
             }
         }
@@ -213,48 +252,29 @@ pub fn visit_neighbours<F: FnMut(Vec2i) -> bool>(position: Vec2i, size: i32, max
     None
 }
 
-pub fn visit_square<F: FnMut(Vec2i) -> bool>(position: Vec2i, size: i32, max_size: i32, mut f: F) -> bool {
-    for y in position.y().max(0)..(position.y() + size).min(max_size) {
-        for x in position.x().max(0)..(position.x() + size).min(max_size) {
-            if !f(Vec2i::new(x, y)) {
-                return false;
-            }
+pub fn find_on_rect_border<F: FnMut(Vec2i) -> bool>(min: Vec2i, max: Vec2i, mut f: F) -> Option<Vec2i> {
+    for y in min.y()..max.y() - 1 {
+        let tile_position = Vec2i::new(min.x(), y);
+        if f(tile_position) {
+            return Some(tile_position);
         }
     }
-    true
-}
-
-pub fn visit_square_border<F: FnMut(Vec2i) -> bool>(position: Vec2i, size: i32, max_size: i32, mut f: F) -> Option<Vec2i> {
-    if position.x() > 0 {
-        for y in position.y().max(0)..(position.y() + size).min(max_size) {
-            let tile_position = Vec2i::new(position.x(), y);
-            if !f(tile_position) {
-                return Some(tile_position);
-            }
+    for x in min.x()..max.x() - 1 {
+        let tile_position = Vec2i::new(x, max.y() - 1);
+        if f(tile_position) {
+            return Some(tile_position);
         }
     }
-    if position.y() + size < max_size as i32 {
-        for x in position.x().max(0)..(position.x() + size).min(max_size) {
-            let tile_position = Vec2i::new(x, position.y() + size);
-            if !f(tile_position) {
-                return Some(tile_position);
-            }
+    for y in min.y() + 1..max.y() {
+        let tile_position = Vec2i::new(max.x() - 1, y);
+        if f(tile_position) {
+            return Some(tile_position);
         }
     }
-    if position.x() + size < max_size as i32 {
-        for y in position.y().max(0)..(position.y() + size).min(max_size) {
-            let tile_position = Vec2i::new(position.x() + size, y);
-            if !f(tile_position) {
-                return Some(tile_position);
-            }
-        }
-    }
-    if position.y() > 0 {
-        for x in position.x().max(0)..(position.x() + size).min(max_size) {
-            let tile_position = Vec2i::new(x, position.y());
-            if !f(tile_position) {
-                return Some(tile_position);
-            }
+    for x in min.x() + 1..max.x() {
+        let tile_position = Vec2i::new(x, min.y());
+        if f(tile_position) {
+            return Some(tile_position);
         }
     }
     None

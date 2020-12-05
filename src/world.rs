@@ -126,10 +126,6 @@ impl World {
         self.map.borrow().get_tile(position)
     }
 
-    pub fn is_free_square(&self, position: Vec2i, size: i32) -> bool {
-        self.map.borrow().is_free_square(position, size)
-    }
-
     pub fn population_use(&self) -> i32 {
         self.population_use
     }
@@ -231,40 +227,77 @@ impl World {
     }
 
     pub fn is_empty_square(&self, position: Vec2i, size: i32) -> bool {
-        self.map.borrow().is_empty_square(position, size)
+        self.map.borrow().find_inside_square(position, size, |_, tile, _| {
+            !matches!(tile, Tile::Empty)
+        }).is_none()
+    }
+
+    pub fn is_free_square(&self, position: Vec2i, size: i32) -> bool {
+        self.map.borrow().find_inside_square(position, size, |_, tile, locked| {
+            locked || !matches!(tile, Tile::Empty)
+        }).is_none()
     }
 
     pub fn find_free_tile_nearby(&self, position: Vec2i, size: i32) -> Option<Vec2i> {
-        self.map.borrow()
-            .visit_neighbours(position, size, |_, tile, locked| {
-                locked || !matches!(tile, Tile::Empty)
-            })
+        self.map.borrow().find_neighbour(position, size, |_, tile, locked| {
+            !locked && matches!(tile, Tile::Empty)
+        })
     }
 
     pub fn find_nearest_free_tile_nearby_for_unit(&self, position: Vec2i, size: i32, unit_id: i32) -> Option<Vec2i> {
         let unit_position = self.get_entity(unit_id).position();
         let mut result = None;
         self.map.borrow()
-            .visit_neighbours(position, size, |tile_position, tile, locked| {
+            .find_neighbour(position, size, |tile_position, tile, locked| {
                 if !locked && (matches!(tile, Tile::Empty) || tile == Tile::Entity(unit_id))
                     && result.map(|v| unit_position.distance(v) > unit_position.distance(tile_position)).unwrap_or(true) {
                     result = Some(tile_position);
                 }
-                true
+                false
             });
         result
     }
 
-    pub fn find_free_space(&self, position: Vec2i, size: i32, min_radius: i32, max_radius: i32) -> Option<Vec2i> {
+    pub fn find_free_space_for(&self, entity_type: &EntityType) -> Option<Vec2i> {
+        let size = self.entity_properties[entity_type].size;
+        let house = matches!(entity_type, EntityType::House);
+        let fit = |map: &Map, position: Vec2i| -> bool {
+            if !map.contains(position) || !map.contains(position + Vec2i::both(size)) {
+                return false;
+            }
+            let has_place_for_entity = map.find_inside_square(position, size, |_, tile, locked| {
+                locked || !matches!(tile, Tile::Empty)
+            }).is_none();
+            let has_space_around = map.find_on_square_border(position - Vec2i::both(1), size + 2, |_, tile, locked| {
+                locked || (!house && !matches!(tile, Tile::Empty))
+                    || (house && !matches!(tile, Tile::Empty) && !matches!(tile, Tile::Outside))
+            }).is_none();
+            has_place_for_entity && has_space_around
+        };
         let map = self.map.borrow();
-        if map.is_free_square(position, size) {
-            return Some(position);
+        let start = if house {
+            let x = if self.start_position.x() < self.map_size / 2 {
+                0
+            } else {
+                self.map_size - 1
+            };
+            let y = if self.start_position.y() < self.map_size / 2 {
+                0
+            } else {
+                self.map_size - 1
+            };
+            Vec2i::new(x, y)
+        } else {
+            self.start_position
+        };
+        if fit(&map, start) {
+            return Some(start);
         }
-        for radius in min_radius.max(1)..max_radius.min(self.map_size) {
-            let result = map.visit_square_border(
-                position - Vec2i::both(radius),
+        for radius in 1..self.get_protected_radius() {
+            let result = map.find_on_square_border(
+                start - Vec2i::both(radius),
                 2 * radius + 1,
-                |v, _, _| !map.is_free_square(v, size),
+                |v, _, _| fit(&map, v),
             );
             if result.is_some() {
                 return result;

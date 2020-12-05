@@ -414,14 +414,8 @@ impl BuildBuildingTask {
             }
         }
         if self.position.is_none() {
-            let margin = 1;
             let size = properties.size;
-            self.position = world.find_free_space(
-                world.start_position() - Vec2i::both(margin),
-                properties.size + 2 * margin,
-                1,
-                world.get_base_size() + size + 6,
-            ).map(|v| v + Vec2i::both(margin));
+            self.position = world.find_free_space_for(&self.entity_type);
             if let Some(position) = self.position {
                 world.lock_square(position, size);
                 self.place_locked = true;
