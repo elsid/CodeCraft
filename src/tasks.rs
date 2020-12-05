@@ -261,8 +261,7 @@ fn build_builders(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus {
     let cost = world.get_entity_cost(&EntityType::BuilderUnit);
     for entity in world.my_bases() {
         if matches!(entity.entity_type, EntityType::BuilderBase) {
-            let role = if
-                (builders < TARGET_BUILDERS_COUNT && builders < 2 * units_count / 3 || units_count / 3 < builders)
+            let role = if (builders < TARGET_BUILDERS_COUNT && builders < 2 * units_count / 3 || units_count / 3 < builders)
                 && entity.active
                 && (matches!(roles[&entity.id], Role::None) || matches!(roles[&entity.id], Role::UnitBuilder))
                 && world.try_allocated_resource_and_population(cost, properties.population_use) {

@@ -306,23 +306,6 @@ impl World {
         None
     }
 
-    pub fn get_base_size(&self) -> i32 {
-        if let Some(base_size) = self.base_size.borrow().as_ref() {
-            return *base_size;
-        }
-        let (max, min) = self.my_bases()
-            .filter(|v| !matches!(v.entity_type, EntityType::Turret))
-            .fold(
-                (Vec2i::zero(), Vec2i::both(self.map_size)),
-                |(max, min), v| {
-                    (max.max(v.position() + Vec2i::both(self.get_entity_properties(&v.entity_type).size)), min.min(v.position()))
-                },
-            );
-        let result = (max.x() - min.x()).max(max.y() - min.y());
-        *self.base_size.borrow_mut() = Some(result);
-        result
-    }
-
     pub fn my_resource(&self) -> i32 {
         self.my_player().resource
             - *self.requested_resource.borrow()
