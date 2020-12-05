@@ -346,7 +346,7 @@ pub struct BuildBuildingTask {
     place_locked: bool,
     position: Option<Vec2i>,
     builder_ids: Vec<i32>,
-    base_id: Option<i32>,
+    building_id: Option<i32>,
 }
 
 impl BuildBuildingTask {
@@ -357,14 +357,14 @@ impl BuildBuildingTask {
             place_locked: false,
             position: None,
             builder_ids: Vec::new(),
-            base_id: None,
+            building_id: None,
         }
     }
 
     pub fn update(&mut self, world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus {
         let properties = world.get_entity_properties(&self.entity_type);
         let cost = world.get_entity_cost(&self.entity_type);
-        if self.base_id.is_none() && !self.resource_reserved {
+        if self.building_id.is_none() && !self.resource_reserved {
             if !world.try_request_resources(cost) {
                 return TaskStatus::Wait;
             }
@@ -373,7 +373,7 @@ impl BuildBuildingTask {
         if let Some(position) = self.position {
             if let Tile::Entity(entity_id) = world.get_tile(position) {
                 if world.get_entity(entity_id).entity_type == self.entity_type {
-                    self.base_id = Some(entity_id);
+                    self.building_id = Some(entity_id);
                     if self.resource_reserved {
                         world.release_requested_resource(cost);
                         self.resource_reserved = false;
@@ -388,17 +388,17 @@ impl BuildBuildingTask {
         while self.builder_ids.len() > need {
             roles.insert(self.builder_ids.pop().unwrap(), Role::None);
         }
-        if let (Some(position), None) = (self.position, self.base_id) {
+        if let (Some(position), None) = (self.position, self.building_id) {
             if !world.is_empty_square(position, properties.size) {
                 self.position = None;
                 world.unlock_square(position, properties.size);
                 self.place_locked = false;
             }
         }
-        if self.position.is_some() && need <= self.builder_ids.len() && self.base_id.is_none() {
+        if self.position.is_some() && need <= self.builder_ids.len() && self.building_id.is_none() {
             return TaskStatus::Wait;
         }
-        if let Some(base_id) = self.base_id {
+        if let Some(base_id) = self.building_id {
             let entity = world.find_entity(base_id);
             if entity.is_none() {
                 return self.fail(world, roles);
@@ -448,7 +448,7 @@ impl BuildBuildingTask {
         }
         if let Some(position) = self.position {
             for builder_id in self.builder_ids.iter() {
-                if let Some(base_id) = self.base_id {
+                if let Some(base_id) = self.building_id {
                     roles.insert(*builder_id, Role::BuildingRepairer { building_id: base_id });
                 } else {
                     roles.insert(*builder_id, Role::BuildingBuilder { position, entity_type: self.entity_type.clone() });
