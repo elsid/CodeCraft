@@ -35,10 +35,10 @@ def main(**kwargs):
 
 
 def run(players, game_type, runner_bin_path, start_port, workers, max_runs, prefix, output_path, verbose, timeout):
-    players = tuple(parse_players(players, start_port, workers))
+    players = tuple(parse_players(text=players, start_port=start_port))
     session = f"{prefix}.{game_type}.{format_players(players)}.{start_port}.{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
-    games_path = os.path.join(output_path, format_players(players), game_type, session)
-    scheduler = Scheduler(workers_number=workers, verbose=verbose, timeout=timeout)
+    games_path = os.path.join(output_path, game_type, session)
+    scheduler = Scheduler(workers_number=workers, ports_per_worker=len(players), verbose=verbose, timeout=timeout)
     scheduler.start()
     for number in range(max_runs):
         if verbose:
@@ -57,20 +57,27 @@ def run(players, game_type, runner_bin_path, start_port, workers, max_runs, pref
     scheduler.join()
 
 
-def parse_players(text, start_port, workers):
+def parse_players(text, start_port):
     for n, v in enumerate(text.split(' ')):
         params = v.split(':')
         player_type = None
         if len(params) >= 1:
             player_type = params[0]
         player_bin_path = None
-        if len(params) >= 2:
-            player_bin_path = params[1]
+        if player_type == 'Tcp':
+            if len(params) >= 2:
+                player_bin_path = params[1]
+            player_name_index = 2
+        else:
+            player_name_index = 1
+        player_name = None
+        if len(params) >= player_name_index + 1:
+            player_name = params[player_name_index]
         assert player_type in {'Tcp', 'QuickStart', 'Empty'}, player_type
         if player_bin_path is not None:
             assert os.path.exists(player_bin_path), player_bin_path
             assert os.path.isfile(player_bin_path), player_bin_path
-        yield Player(type=player_type, bin_path=player_bin_path, start_port=start_port + n)
+        yield Player(type=player_type, bin_path=player_bin_path, start_port=start_port + n, name=player_name)
 
 
 def format_players(players):
@@ -81,6 +88,7 @@ Player = collections.namedtuple('Player', (
     'type',
     'bin_path',
     'start_port',
+    'name',
 ))
 
 
@@ -105,7 +113,7 @@ Worker = collections.namedtuple('Worker', (
 
 
 class Scheduler:
-    def __init__(self, workers_number, verbose, timeout):
+    def __init__(self, workers_number, ports_per_worker, verbose, timeout):
         self.__task_queue = queue.Queue(maxsize=workers_number)
         workers = list()
         for n in range(workers_number):
@@ -116,7 +124,7 @@ class Scheduler:
                         target=run_worker,
                         kwargs=dict(
                             task_queue=self.__task_queue,
-                            port_shift=n * workers_number,
+                            port_shift=n * ports_per_worker,
                             stop=stop,
                             verbose=verbose,
                             timeout=timeout,
@@ -179,11 +187,12 @@ def run_worker(task_queue, port_shift, stop, verbose, timeout):
 
 def handle_task(task, port_shift, verbose, stop, timeout):
     if verbose:
-        print(f'Handle {task} by worker {port_shift}')
+        print(f'Handle {task} by worker {port_shift}, ports: {[v.start_port + port_shift for v in task.players]}')
     task_path = os.path.join(task.runner.output_path, 'task.json')
     start = time.time()
     runner_process = runner.run_game(
         player_ports=[(v.type, v.start_port + port_shift) for v in task.players],
+        player_names=[format_player_name(v) if v.name is None else v.name for v in task.players],
         game_type=task.runner.game_type,
         bin_path=task.runner.bin_path,
         verbose=verbose,
@@ -223,6 +232,12 @@ def handle_task(task, port_shift, verbose, stop, timeout):
             worker.stop.set()
     for worker in player_workers:
         worker.thread.join()
+
+
+def format_player_name(player):
+    if player.bin_path is None:
+        return f'{player.type}:{player.start_port}'
+    return f'{player.type}:{player.start_port}:{os.path.split(player.bin_path)[-1]}'
 
 
 def run_player(bin_path, port, verbose, stop, timeout):

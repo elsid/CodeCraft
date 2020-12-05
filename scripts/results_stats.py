@@ -341,15 +341,10 @@ def collect_data(paths):
         task_content = read_file(task_path)
         if not task_content:
             continue
-        players = tuple(parse_players(players_content))
+        players = tuple(json.loads(players_content))
         result = parse_result(result_content, players)
         result.update(json.loads(task_content))
         yield result
-
-
-def parse_players(content):
-    data = json.loads(content)
-    return (f"{v.split('.')[0]}.{n}" for n, v in enumerate(data))
 
 
 def read_file(path):

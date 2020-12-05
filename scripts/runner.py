@@ -32,7 +32,7 @@ def main(**kwargs):
 def run(player_types, game_type, start_port, max_runs, prefix, bin_path, output_path, verbose, timeout, should_stop=None):
     player_types = parse_player_types(player_types)
     session = f"{prefix}.{'.'.join(player_types)}.{game_type}.{start_port}.{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
-    session_path = os.path.join(output_path, '.'.join(player_types), game_type, session)
+    session_path = os.path.join(output_path, game_type, session)
     os.makedirs(session_path, exist_ok=False)
     player_ports = list((v, n + start_port) for n, v in enumerate(player_types))
     seeds = set()
@@ -47,6 +47,7 @@ def run(player_types, game_type, start_port, max_runs, prefix, bin_path, output_
         seeds.add(seed)
         process = run_game(
             player_ports=player_ports,
+            player_names=[f'{v[0]}:{v[1]}' for v in player_ports],
             game_type=game_type,
             bin_path=bin_path,
             verbose=verbose,
@@ -67,7 +68,7 @@ def parse_player_types(value):
     return result
 
 
-def run_game(player_ports, game_type, bin_path, verbose, output_path, seed):
+def run_game(player_ports, player_names, game_type, bin_path, verbose, output_path, seed):
     os.makedirs(output_path, exist_ok=False)
     config_path = os.path.join(output_path, 'config.json')
     result_path = os.path.join(output_path, 'result.json')
@@ -78,8 +79,7 @@ def run_game(player_ports, game_type, bin_path, verbose, output_path, seed):
         seed=seed,
     )
     helpers.write_json(data=config, path=config_path)
-    player_names = [f"{v[0]}.{v[1]}" for v in player_ports]
-    helpers.write_json(data=list(player_names), path=players_path)
+    helpers.write_json(data=player_names, path=players_path)
     args = [
         os.path.abspath(bin_path),
         '--batch-mode',
