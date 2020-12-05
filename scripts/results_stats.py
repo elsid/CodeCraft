@@ -174,7 +174,9 @@ def show_position_distribution_plot(pyplot, stats):
     fig, ax = pyplot.subplots()
     fig.canvas.set_window_title('position_distribution')
     ax.set_title('position_distribution')
-    bins = list(range(len(stats['players']) + 1))
+    min_position = min(min(v) for v in stats['positions_dynamic'].values())
+    max_position = max(max(v) for v in stats['positions_dynamic'].values())
+    bins = list(range(min_position, max_position + 2))
     for player, values in stats['positions_dynamic'].items():
         ax.hist(values, bins=bins, label=player, alpha=0.5)
         ax.set_xticks(bins)
@@ -186,7 +188,9 @@ def show_place_distribution_plot(pyplot, stats):
     fig, ax = pyplot.subplots()
     fig.canvas.set_window_title('place_distribution')
     ax.set_title('place_distribution')
-    bins = list(range(1, len(stats['players']) + 2))
+    min_place = min(min(v) for v in stats['places_dynamic'].values())
+    max_place = max(max(v) for v in stats['places_dynamic'].values())
+    bins = list(range(min_place, max_place + 2))
     for player, values in stats['places_dynamic'].items():
         ax.hist(values, bins=bins, label=player, alpha=0.5)
         ax.set_xticks(bins)
