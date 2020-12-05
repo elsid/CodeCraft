@@ -17,7 +17,6 @@ use crate::my_strategy::{Group, GroupState, Positionable, Role, Tile, Vec2i, Wor
 use crate::my_strategy::Vec2f;
 
 pub const TARGET_BUILDERS_COUNT: usize = 60;
-pub const INITIAL_BUILDERS_COUNT: usize = 10;
 
 #[derive(Debug)]
 pub struct TaskManager {
@@ -59,6 +58,7 @@ impl TaskManager {
                 }
                 Task::GatherGroup(..) => self.stats.gather_group -= 1,
                 Task::RepairBuildings => self.stats.repair_buildings -= 1,
+                _ => (),
             }
         }
         self.order.retain(|v| !done.contains(v));
@@ -121,6 +121,7 @@ impl TaskManager {
             }
             Task::GatherGroup(..) => self.stats.gather_group += 1,
             Task::RepairBuildings => self.stats.repair_buildings += 1,
+            _ => (),
         }
         self.tasks.insert(task_id, task);
         task_id
@@ -147,6 +148,7 @@ pub enum Task {
     RepairBuildings,
     BuildBuilding(BuildBuildingTask),
     GatherGroup(GatherGroupTask),
+    BuildUnits(BuildUnitsTask),
 }
 
 impl Task {
@@ -162,6 +164,10 @@ impl Task {
         Self::GatherGroup(GatherGroupTask::new(group_id))
     }
 
+    pub fn build_units(entity_type: EntityType, count: usize) -> Self {
+        Self::BuildUnits(BuildUnitsTask::new(entity_type, count))
+    }
+
     pub fn update(&mut self, world: &World, roles: &mut HashMap<i32, Role>, groups: &mut HashMap<usize, Group>) -> TaskStatus {
         match self {
             Self::HarvestResources(task) => task.update(world, roles),
@@ -169,6 +175,7 @@ impl Task {
             Self::RepairBuildings => repair_buildings(world, roles),
             Self::BuildBuilding(task) => task.update(world, roles),
             Self::GatherGroup(task) => task.update(world, roles, groups),
+            Self::BuildUnits(task) => task.update(world, roles),
         }
     }
 }
@@ -254,9 +261,8 @@ fn build_builders(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus {
     let cost = world.get_entity_cost(&EntityType::BuilderUnit);
     for entity in world.my_bases() {
         if matches!(entity.entity_type, EntityType::BuilderBase) {
-            let role = if (
-                builders < INITIAL_BUILDERS_COUNT
-                    || (builders < TARGET_BUILDERS_COUNT && builders < 2 * units_count / 3 || units_count / 3 < builders))
+            let role = if
+                (builders < TARGET_BUILDERS_COUNT && builders < 2 * units_count / 3 || units_count / 3 < builders)
                 && entity.active
                 && (matches!(roles[&entity.id], Role::None) || matches!(roles[&entity.id], Role::UnitBuilder))
                 && world.try_allocated_resource_and_population(cost, properties.population_use) {
@@ -521,7 +527,7 @@ impl GatherGroupTask {
                     && (matches!(roles[&unit.id], Role::None) || matches!(roles[&unit.id], Role::Harvester { .. }))
                     && !(
                     matches!(unit.entity_type, EntityType::BuilderUnit)
-                        && roles.values().filter(|v| matches!(v, Role::Harvester { .. })).count() <= INITIAL_BUILDERS_COUNT
+                        && roles.values().filter(|v| matches!(v, Role::Harvester { .. })).count() <= 10
                 ) {
                     group.add_unit(unit.id, unit.entity_type.clone());
                     roles.insert(unit.id, Role::GroupMember { group_id: self.group_id });
@@ -549,6 +555,39 @@ impl GatherGroupTask {
             TaskStatus::Wait
         } else {
             TaskStatus::Fail
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct BuildUnitsTask {
+    entity_type: EntityType,
+    left: usize,
+}
+
+impl BuildUnitsTask {
+    pub fn new(entity_type: EntityType, count: usize) -> Self {
+        Self { entity_type, left: count }
+    }
+
+    pub fn update(&mut self, world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus {
+        for base in world.my_bases() {
+            if let Some(build) = world.get_entity_properties(&base.entity_type).build.as_ref() {
+                if !base.active || !build.options.iter().any(|v| *v == self.entity_type) {
+                    continue;
+                }
+                let unit_properties = world.get_entity_properties(&self.entity_type);
+                let cost = world.get_entity_cost(&self.entity_type);
+                if matches!(roles[&base.id], Role::None) && world.try_allocated_resource_and_population(cost, unit_properties.population_use) {
+                    roles.insert(base.id, Role::UnitBuilder);
+                    self.left -= 1;
+                }
+            }
+        }
+        if self.left == 0 {
+            TaskStatus::Done
+        } else {
+            TaskStatus::Wait
         }
     }
 }

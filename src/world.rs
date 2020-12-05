@@ -395,6 +395,10 @@ impl World {
         self.map.borrow().debug_update(debug);
     }
 
+    pub fn get_my_entity_count_of(&self, entity_type: &EntityType) -> usize {
+        self.my_entities_count[entity_type]
+    }
+
     pub fn get_my_builder_units_count(&self) -> usize {
         self.my_entities_count[&EntityType::BuilderUnit]
     }

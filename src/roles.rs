@@ -52,6 +52,13 @@ impl Role {
             Role::None => get_default_action(entity, world),
         }
     }
+
+    pub fn is_temporary(&self) -> bool {
+        match self {
+            Role::UnitBuilder => true,
+            _ => false,
+        }
+    }
 }
 
 fn harvest_resources(builder: &Entity, world: &World, position: Vec2i) -> EntityAction {

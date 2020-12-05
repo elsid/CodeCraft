@@ -26,7 +26,6 @@ use crate::DebugInterface;
 use crate::my_strategy::{
     Group,
     GroupStatus,
-    INITIAL_BUILDERS_COUNT,
     is_protected_entity_type,
     Positionable,
     Role,
@@ -51,6 +50,7 @@ pub struct Bot {
     tasks: TaskManager,
     world: World,
     actions: HashMap<i32, EntityAction>,
+    opening: bool,
 }
 
 impl Bot {
@@ -63,6 +63,7 @@ impl Bot {
             tasks: TaskManager::new(),
             world,
             actions: HashMap::new(),
+            opening: true,
         }
     }
 
@@ -111,6 +112,11 @@ impl Bot {
                 v.insert(Role::None);
             }
         }
+        for role in self.roles.values_mut() {
+            if role.is_temporary() {
+                *role = Role::None;
+            }
+        }
     }
 
     fn update_groups(&mut self) {
@@ -125,12 +131,13 @@ impl Bot {
     }
 
     fn update_tasks(&mut self) {
-        self.try_add_initial_tasks();
-        self.try_gather_small_group();
-        self.try_gather_group();
-        self.try_build_house();
-        self.try_build_ranged_base();
-        self.try_build_builder_base();
+        if !self.opening || self.try_play_opening() {
+            self.opening = false;
+            self.try_gather_group();
+            self.try_build_house();
+            self.try_build_ranged_base();
+            self.try_build_builder_base();
+        }
         self.tasks.update(&self.world, &mut self.roles, &mut self.groups);
     }
 
@@ -146,11 +153,8 @@ impl Bot {
             .collect()
     }
 
-    fn try_add_initial_tasks(&mut self) {
+    fn try_play_opening(&mut self) -> bool {
         if self.world.current_tick() == 0 {
-            self.tasks.push_back(Task::BuildBuilders);
-            self.tasks.push_back(Task::RepairBuildings);
-            self.tasks.push_back(Task::harvest_resources());
             let mut need = HashMap::new();
             let melee_units = self.world.get_my_melee_units_count();
             if melee_units > 0 {
@@ -164,27 +168,24 @@ impl Bot {
                 self.gather_group(need);
             }
         }
-    }
-
-    fn try_gather_small_group(&mut self) {
-        let builders = self.world.get_my_builder_units_count();
-        if self.tasks.stats().gather_group == 0 && 3 < builders && builders < INITIAL_BUILDERS_COUNT {
-            let mut need = HashMap::new();
-            if self.world.my_ranged_bases().any(|v| v.active) {
-                need.insert(EntityType::RangedUnit, builders / 3);
-            }
-            if self.world.my_melee_bases().any(|v| v.active) {
-                need.insert(EntityType::MeleeUnit, builders / 3);
-            }
-            if !need.is_empty() {
-                self.gather_group(need);
-            }
+        if self.world.get_my_entity_count_of(&EntityType::RangedBase) == 0
+            || self.world.get_my_units_count() >= 15 {
+            self.tasks.push_back(Task::BuildBuilders);
+            return true;
         }
+        if self.world.my_resource() >= self.world.get_entity_cost(&EntityType::House) {
+            self.tasks.push_back(Task::build_building(EntityType::House));
+        }
+        if self.world.current_tick() == 0 {
+            self.tasks.push_back(Task::build_units(EntityType::BuilderUnit, (self.world.population_provide() - self.world.population_use()) as usize));
+            self.tasks.push_back(Task::RepairBuildings);
+            self.tasks.push_back(Task::harvest_resources());
+        }
+        false
     }
 
     fn try_gather_group(&mut self) {
-        let builders = self.world.get_my_builder_units_count();
-        if self.tasks.stats().gather_group == 0 && builders >= INITIAL_BUILDERS_COUNT {
+        if self.tasks.stats().gather_group == 0 {
             let mut need = HashMap::new();
             if self.world.my_ranged_bases().any(|v| v.active) {
                 need.insert(EntityType::RangedUnit, 3);
@@ -213,10 +214,7 @@ impl Bot {
     fn try_build_house(&mut self) {
         let capacity_left = self.world.population_provide() - self.world.population_use();
         if (self.tasks.stats().build_house as i32) < (self.world.population_use() / 10).max(1).min(3)
-            && (
-            (self.world.population_use() < 15 && capacity_left < 1)
-                || (self.world.population_use() >= 15 && (capacity_left < 5 || self.world.population_use() * 100 / self.world.population_provide() > 80))
-        ) {
+            && (capacity_left < 5 || self.world.population_use() * 100 / self.world.population_provide() > 90) {
             self.tasks.push_front(Task::build_building(EntityType::House));
         }
     }
@@ -225,10 +223,7 @@ impl Bot {
         if self.tasks.stats().build_ranged_base == 0
             && (self.world.get_my_ranged_bases_count() as i32) < self.world.my_resource() / self.world.get_entity_cost(&EntityType::RangedBase) / 3
             && self.world.get_my_builder_units_count() > 0
-            && (
-            self.world.get_my_builder_units_count() > INITIAL_BUILDERS_COUNT
-                || self.world.my_resource() >= self.world.get_entity_cost(&EntityType::RangedBase)
-        ) {
+            && self.world.my_resource() >= self.world.get_entity_cost(&EntityType::RangedBase) {
             self.tasks.push_front(Task::build_building(EntityType::RangedBase));
         }
     }
@@ -237,17 +232,15 @@ impl Bot {
         if self.tasks.stats().build_builder_base == 0
             && self.world.get_my_builder_bases_count() == 0
             && self.world.get_my_builder_units_count() > 0
-            && (
-            self.world.get_my_builder_units_count() > INITIAL_BUILDERS_COUNT
-                || self.world.my_resource() >= self.world.get_entity_cost(&EntityType::BuilderBase)
-        ) {
+            && self.world.my_resource() >= self.world.get_entity_cost(&EntityType::BuilderBase) {
             self.tasks.push_front(Task::build_building(EntityType::BuilderBase));
         }
     }
 
     fn set_group_targets(&mut self) {
         for group in self.groups.values_mut() {
-            if group.units_count() < 5 || group.units_count() < group.need_count() {
+            if group.units_count() < group.need_count() ||
+                self.world.get_my_entity_count_of(&EntityType::MeleeUnit) + self.world.get_my_entity_count_of(&EntityType::RangedUnit) < 15 {
                 group.set_status(GroupStatus::Defensive);
             } else {
                 group.set_status(GroupStatus::Aggressive);
@@ -269,7 +262,11 @@ impl Bot {
                     }) {
                     group.set_target(Some(target.position()));
                 } else {
-                    group.set_target(Some(position));
+                    let target = self.world.my_turrets()
+                        .min_by_key(|v| v.position().distance(position))
+                        .map(|v| v.position())
+                        .unwrap_or(self.world.start_position());
+                    group.set_target(Some(target));
                 }
                 GroupStatus::Aggressive => if let Some(target) = self.world.opponent_entities()
                     .min_by_key(|v| (v.position().distance(position), v.id)) {
