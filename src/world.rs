@@ -436,8 +436,9 @@ impl World {
     pub fn is_attacked_by_opponents(&self, position: Vec2i) -> bool {
         self.opponent_entities()
             .filter_map(|entity| {
-                self.entity_properties[&entity.entity_type].attack.as_ref()
-                    .map(|v| (entity.position(), v.attack_range.max(3)))
+                let properties = &self.entity_properties[&entity.entity_type];
+                properties.attack.as_ref()
+                    .map(|v| (entity.center(properties.size), properties.size / 2 + v.attack_range.max(3)))
             })
             .any(|(entity_position, attack_range)| {
                 entity_position.distance(position) <= attack_range
@@ -457,7 +458,12 @@ impl World {
         }
         let result = self.my_entities()
             .filter(|v| is_protected_entity_type(&v.entity_type))
-            .map(|v| v.position().distance(self.start_position) + self.entity_properties[&v.entity_type].sight_range)
+            .map(|v| {
+                let properties = &self.entity_properties[&v.entity_type];
+                v.center(properties.size).distance(self.start_position)
+                    + properties.size / 2
+                    + properties.sight_range
+            })
             .max();
         *self.protected_radius.borrow_mut() = result;
         result.unwrap_or(0)

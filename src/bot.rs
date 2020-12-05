@@ -252,24 +252,30 @@ impl Bot {
             let world = &self.world;
             match group.status() {
                 GroupStatus::Defensive => if let Some(target) = self.world.opponent_entities()
-                    .filter(|v| world.is_inside_protected_perimeter(v.position()))
+                    .filter(|v| {
+                        world.is_inside_protected_perimeter(v.center(world.get_entity_properties(&v.entity_type).size))
+                    })
                     .min_by_key(|entity| {
+                        let properties = world.get_entity_properties(&entity.entity_type);
+                        let entity_center = entity.center(properties.size);
                         let distance_to_my_entity = world.my_entities()
                             .filter(|v| is_protected_entity_type(&v.entity_type))
-                            .map(|v| v.distance(*entity))
+                            .map(|v| v.center(world.get_entity_properties(&v.entity_type).size).distance(entity_center))
                             .min();
-                        (distance_to_my_entity, entity.position().distance(position), entity.id)
+                        (distance_to_my_entity, entity_center.distance(position), entity.id)
                     }) {
                     group.set_target(Some(target.position()));
                 } else {
                     let target = self.world.my_turrets()
-                        .min_by_key(|v| v.position().distance(position))
+                        .min_by_key(|v| {
+                            v.center(world.get_entity_properties(&v.entity_type).size).distance(position)
+                        })
                         .map(|v| v.position())
                         .unwrap_or(self.world.start_position());
                     group.set_target(Some(target));
                 }
                 GroupStatus::Aggressive => if let Some(target) = self.world.opponent_entities()
-                    .min_by_key(|v| (v.position().distance(position), v.id)) {
+                    .min_by_key(|v| (v.center(world.get_entity_properties(&v.entity_type).size).distance(position), v.id)) {
                     group.set_target(Some(target.position()));
                 } else {
                     group.set_target(Some(position));

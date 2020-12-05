@@ -318,13 +318,14 @@ fn repair_buildings(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus
     let mut harvesters = roles.values().filter(|v| matches!(v, Role::Harvester { .. })).count();
     for (_, building_id) in buildings.into_iter() {
         let building = world.get_entity(building_id);
+        let building_center = building.center(world.get_entity_properties(&building.entity_type).size);
         let mut candidates: Vec<(i32, i32)> = world.my_builder_units()
             .filter(|v| match roles[&v.id] {
                 Role::None => true,
                 Role::Harvester { .. } => harvesters > 0,
                 _ => false,
             })
-            .map(|v| (v.distance(building), v.id))
+            .map(|v| (v.center(world.get_entity_properties(&v.entity_type).size).distance(building_center), v.id))
             .collect();
         if candidates.is_empty() {
             break;

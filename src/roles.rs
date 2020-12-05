@@ -150,6 +150,7 @@ fn repair_building(builder: &Entity, world: &World, base_id: i32) -> EntityActio
 
 fn assist_group(unit: &Entity, world: &World, group: &Group) -> EntityAction {
     let properties = world.get_entity_properties(&unit.entity_type);
+    let unit_center = unit.center(properties.size);
     let repair_action = properties.repair.as_ref()
         .and_then(|_| {
             group.units()
@@ -158,11 +159,12 @@ fn assist_group(unit: &Entity, world: &World, group: &Group) -> EntityAction {
                         return None;
                     }
                     let other = world.get_entity(*unit_id);
-                    let damage = world.get_entity_properties(&other.entity_type).max_health - other.health;
+                    let other_properties = world.get_entity_properties(&other.entity_type);
+                    let damage = other_properties.max_health - other.health;
                     if damage == 0 {
                         return None;
                     }
-                    let distance = other.distance(unit);
+                    let distance = other.center(other_properties.size).distance(unit_center);
                     if distance > properties.sight_range {
                         return None;
                     }
@@ -186,7 +188,10 @@ fn assist_group(unit: &Entity, world: &World, group: &Group) -> EntityAction {
     let attack_action = properties.attack.as_ref()
         .and_then(|_| {
             world.opponent_entities()
-                .find(|v| v.distance(unit) <= properties.sight_range)
+                .find(|v| {
+                    v.center(world.get_entity_properties(&v.entity_type).size).distance(unit_center)
+                        <= properties.sight_range
+                })
                 .map(|_| AttackAction {
                     target: None,
                     auto_attack: Some(AutoAttack {
