@@ -316,6 +316,7 @@ fn repair_buildings(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus
         .collect();
     buildings.sort();
     let mut harvesters = roles.values().filter(|v| matches!(v, Role::Harvester { .. })).count();
+    let builders = world.get_my_entity_count_of(&EntityType::BuilderUnit);
     for (_, building_id) in buildings.into_iter() {
         let building = world.get_entity(building_id);
         let building_center = building.center(world.get_entity_properties(&building.entity_type).size);
@@ -323,6 +324,7 @@ fn repair_buildings(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus
             .filter(|v| match roles[&v.id] {
                 Role::None => true,
                 Role::Harvester { .. } => harvesters > 0,
+                Role::BuildingBuilder { .. } => true,
                 _ => false,
             })
             .map(|v| (v.center(world.get_entity_properties(&v.entity_type).size).distance(building_center), v.id))
@@ -331,8 +333,12 @@ fn repair_buildings(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus
             break;
         }
         candidates.sort();
-        let cost = world.get_entity_cost(&building.entity_type);
-        let need = (world.get_my_builder_units_count() / 10).max(1).min(cost as usize / 40);
+        let need = match building.entity_type {
+            EntityType::BuilderBase | EntityType::MeleeBase | EntityType::RangedBase => {
+                (world.get_entity_properties(&building.entity_type).size as usize / 2).max(1).min(builders / 2).min(harvesters / 2)
+            }
+            _ => 1,
+        };
         while candidates.len() > need {
             candidates.pop();
         }
