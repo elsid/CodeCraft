@@ -53,7 +53,7 @@ impl TaskManager {
         for task_id in done.iter() {
             match &self.tasks[task_id] {
                 Task::HarvestResources(..) => self.stats.harvest_resources -= 1,
-                Task::BuildBuilders => self.stats.build_units -= 1,
+                Task::BuildBuilders => self.stats.build_builders -= 1,
                 Task::BuildBuilding(v) => if v.entity_type == EntityType::House {
                     self.stats.build_house -= 1;
                 }
@@ -110,7 +110,7 @@ impl TaskManager {
         self.next_task_id += 1;
         match &task {
             Task::HarvestResources(..) => self.stats.harvest_resources += 1,
-            Task::BuildBuilders => self.stats.build_units += 1,
+            Task::BuildBuilders => self.stats.build_builders += 1,
             Task::BuildBuilding(v) => match v.entity_type {
                 EntityType::House => self.stats.build_house += 1,
                 EntityType::Turret => self.stats.build_turret += 1,
@@ -130,7 +130,7 @@ impl TaskManager {
 #[derive(Default, Debug)]
 pub struct TasksCount {
     pub harvest_resources: usize,
-    pub build_units: usize,
+    pub build_builders: usize,
     pub build_house: usize,
     pub build_turret: usize,
     pub build_builder_base: usize,
