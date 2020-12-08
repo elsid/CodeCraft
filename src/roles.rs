@@ -23,6 +23,7 @@ pub enum Role {
     None,
     Harvester {
         position: Vec2i,
+        resource_id: i32,
     },
     UnitBuilder,
     BuildingBuilder {
@@ -43,7 +44,7 @@ pub enum Role {
 impl Role {
     pub fn get_action(&self, entity: &Entity, world: &World, groups: &HashMap<usize, Group>) -> EntityAction {
         match self {
-            Role::Harvester { position } => harvest_resources(entity, world, *position),
+            Role::Harvester { position, resource_id } => harvest_resources(entity, world, *position, *resource_id),
             Role::UnitBuilder => build_unit(entity, world),
             Role::BuildingBuilder { position, entity_type } => build_building(entity, world, *position, entity_type),
             Role::BuildingRepairer { building_id: base_id } => repair_building(entity, world, *base_id),
@@ -61,17 +62,21 @@ impl Role {
     }
 }
 
-fn harvest_resources(builder: &Entity, world: &World, position: Vec2i) -> EntityAction {
+fn harvest_resources(builder: &Entity, world: &World, position: Vec2i, resource_id: i32) -> EntityAction {
     let builder_properties = world.get_entity_properties(&EntityType::BuilderUnit);
     let builder_attack_properties = builder_properties.attack.as_ref().unwrap();
     EntityAction {
-        attack_action: Some(AttackAction {
-            target: None,
-            auto_attack: Some(AutoAttack {
-                pathfind_range: builder_attack_properties.attack_range,
-                valid_targets: vec![EntityType::Resource, EntityType::BuilderUnit],
-            }),
-        }),
+        attack_action: if position == builder.position() {
+            Some(AttackAction {
+                target: Some(resource_id),
+                auto_attack: Some(AutoAttack {
+                    pathfind_range: builder_attack_properties.attack_range,
+                    valid_targets: vec![EntityType::BuilderUnit],
+                }),
+            })
+        } else {
+            None
+        },
         build_action: None,
         repair_action: None,
         move_action: if position != builder.position() {

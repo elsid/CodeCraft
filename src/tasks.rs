@@ -169,7 +169,7 @@ impl HarvestResourcesTask {
         let mut assigned_builders = HashSet::new();
         let mut used_positions = HashSet::new();
         for builder in world.my_builder_units() {
-            if let Role::Harvester { position } = roles[&builder.id] {
+            if let Role::Harvester { position, .. } = roles[&builder.id] {
                 if world.is_attacked_by_opponents(position) {
                     roles.insert(builder.id, Role::None);
                 } else {
@@ -213,7 +213,7 @@ impl HarvestResourcesTask {
                     .map(|(k, v)| (*k, *v));
                 if let Some((position, resource_id)) = nearest {
                     self.assignments.insert(builder.id, resource_id);
-                    roles.insert(builder.id, Role::Harvester { position });
+                    roles.insert(builder.id, Role::Harvester { position, resource_id });
                     harvester_positions.remove(&position);
                 }
             }
