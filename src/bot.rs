@@ -159,7 +159,9 @@ impl Bot {
             }
         }
         if self.world.get_my_entity_count_of(&EntityType::RangedBase) == 0
-            || self.world.get_my_units_count() >= 15 {
+            || self.world.get_my_units_count() >= 15
+            || self.world.get_my_entity_count_of(&EntityType::MeleeUnit) == 0
+            || self.world.get_my_entity_count_of(&EntityType::RangedUnit) == 0 {
             self.tasks.push_back(Task::BuildBuilders);
             return true;
         }
