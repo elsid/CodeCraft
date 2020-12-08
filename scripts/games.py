@@ -31,11 +31,12 @@ import itertools
 @click.option('--output_path', default=os.path.join(os.getcwd(), 'results/new'), type=click.Path(dir_okay=True, file_okay=False))
 @click.option('--verbose', is_flag=True)
 @click.option('--timeout', default=120, type=int)
+@click.option('--seed', default=None, type=int)
 def main(**kwargs):
     run(**kwargs)
 
 
-def run(players, game_type, runner_bin_path, start_port, workers, max_runs, prefix, output_path, verbose, timeout):
+def run(players, game_type, runner_bin_path, start_port, workers, max_runs, prefix, output_path, verbose, timeout, seed):
     players = tuple(parse_players(text=players, start_port=start_port))
     session = f"{prefix}.{game_type}.{format_players(players)}.{start_port}.{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     games_path = os.path.join(output_path, game_type, session)
@@ -49,7 +50,7 @@ def run(players, game_type, runner_bin_path, start_port, workers, max_runs, pref
             runner=Runner(
                 bin_path=runner_bin_path,
                 game_type=game_type,
-                seed=random.randint(0, 2**64 - 1),
+                seed=random.randint(0, 2**64 - 1) if seed is None else seed,
                 output_path=os.path.join(games_path, '%s.%s' % (number, int(time.time() * 1e6))),
             ),
             players=players_permutations[number % len(players_permutations)],
