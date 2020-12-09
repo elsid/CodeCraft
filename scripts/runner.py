@@ -68,7 +68,7 @@ def parse_player_types(value):
     return result
 
 
-def run_game(player_ports, player_names, game_type, bin_path, verbose, output_path, seed):
+def run_game(player_ports, player_names, game_type, bin_path, verbose, output_path, seed, visual):
     os.makedirs(output_path, exist_ok=False)
     config_path = os.path.join(output_path, 'config.json')
     result_path = os.path.join(output_path, 'result.json')
@@ -82,11 +82,12 @@ def run_game(player_ports, player_names, game_type, bin_path, verbose, output_pa
     helpers.write_json(data=player_names, path=players_path)
     args = [
         os.path.abspath(bin_path),
-        '--batch-mode',
         '--config', config_path,
         '--save-results', result_path,
         '--player-names', *player_names,
     ]
+    if not visual:
+        args.append('--batch-mode')
     if verbose:
         print('Run', *args)
     return subprocess.Popen(

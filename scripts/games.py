@@ -33,12 +33,13 @@ import itertools
 @click.option('--timeout', default=120, type=int)
 @click.option('--seed', default=None, type=int)
 @click.option('--config_path', default=None, type=click.Path(exists=True, dir_okay=False))
+@click.option('--visual', is_flag=False)
 def main(**kwargs):
     run(**kwargs)
 
 
 def run(players, game_type, runner_bin_path, start_port, workers, max_runs, prefix, output_path,
-        verbose, timeout, seed, config_path):
+        verbose, timeout, seed, config_path, visual):
     players = tuple(parse_players(text=players, start_port=start_port))
     session = f"{prefix}.{game_type}.{format_players(players)}.{start_port}.{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     games_path = os.path.join(output_path, game_type, session)
@@ -55,6 +56,7 @@ def run(players, game_type, runner_bin_path, start_port, workers, max_runs, pref
                 seed=random.randint(0, 2**64 - 1) if seed is None else seed,
                 output_path=os.path.join(games_path, '%s.%s' % (number, int(time.time() * 1e6))),
                 config_path=config_path,
+                visual=visual,
             ),
             players=players_permutations[number % len(players_permutations)],
         ))
@@ -110,6 +112,7 @@ Runner = collections.namedtuple('Runner', (
     'seed',
     'output_path',
     'config_path',
+    'visual',
 ))
 
 
@@ -205,6 +208,7 @@ def handle_task(task, port_shift, verbose, stop, timeout):
         verbose=verbose,
         output_path=task.runner.output_path,
         seed=task.runner.seed,
+        visual=task.runner.visual,
     )
     player_workers = list()
     for player in task.players:
