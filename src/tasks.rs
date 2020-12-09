@@ -72,7 +72,7 @@ impl TaskManager {
                 text: format!("Tasks:"),
                 vertex: ColoredVertex {
                     world_pos: None,
-                    screen_offset: Vec2f::new(50.0, state.window_size.y as f64 - 50.0 - 32.0 * 2.0).as_model(),
+                    screen_offset: Vec2f::new(50.0, state.window_size.y as f32 - 50.0 - 32.0 * 2.0).as_model(),
                     color: Color { a: 1.0, r: 1.0, g: 1.0, b: 1.0 },
                 },
                 alignment: 0.0,
@@ -85,7 +85,7 @@ impl TaskManager {
                     text: format!("{}) {:?}", i, self.tasks[&self.order[i]]),
                     vertex: ColoredVertex {
                         world_pos: None,
-                        screen_offset: Vec2f::new(70.0, state.window_size.y as f64 - 50.0 - (i + 3) as f64 * 32.0).as_model(),
+                        screen_offset: Vec2f::new(70.0, state.window_size.y as f32 - 50.0 - (i + 3) as f32 * 32.0).as_model(),
                         color: Color { a: 1.0, r: 1.0, g: 1.0, b: 1.0 },
                     },
                     alignment: 0.0,

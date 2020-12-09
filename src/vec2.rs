@@ -6,13 +6,13 @@ use crate::my_strategy::Square;
 
 #[derive(Default, Clone, Copy, Debug, PartialOrd)]
 pub struct Vec2f {
-    x: f64,
-    y: f64,
+    x: f32,
+    y: f32,
 }
 
 impl Vec2f {
     #[inline(always)]
-    pub const fn new(x: f64, y: f64) -> Self {
+    pub const fn new(x: f32, y: f32) -> Self {
         Self { x, y }
     }
 
@@ -27,27 +27,27 @@ impl Vec2f {
     }
 
     #[inline(always)]
-    pub const fn only_x(x: f64) -> Self {
+    pub const fn only_x(x: f32) -> Self {
         Self { x, y: 0.0 }
     }
 
     #[inline(always)]
-    pub const fn only_y(y: f64) -> Self {
+    pub const fn only_y(y: f32) -> Self {
         Self { x: 0.0, y }
     }
 
     #[inline(always)]
-    pub const fn both(value: f64) -> Self {
+    pub const fn both(value: f32) -> Self {
         Self { x: value, y: value }
     }
 
     #[inline(always)]
-    pub const fn x(&self) -> f64 {
+    pub const fn x(&self) -> f32 {
         self.x
     }
 
     #[inline(always)]
-    pub const fn y(&self) -> f64 {
+    pub const fn y(&self) -> f32 {
         self.y
     }
 
@@ -61,17 +61,17 @@ impl Vec2f {
     }
 
     #[inline(always)]
-    pub fn norm(&self) -> f64 {
+    pub fn norm(&self) -> f32 {
         (self.x.square() + self.y.square()).sqrt()
     }
 
     #[inline(always)]
-    pub fn distance(&self, other: Self) -> f64 {
+    pub fn distance(&self, other: Self) -> f32 {
         (other - *self).norm()
     }
 
     #[inline(always)]
-    pub fn dot(&self, other: Self) -> f64 {
+    pub fn dot(&self, other: Self) -> f32 {
         self.x * other.x + self.y * other.y
     }
 
@@ -83,19 +83,19 @@ impl Vec2f {
 
 impl From<Vec2i> for Vec2f {
     fn from(value: Vec2i) -> Self {
-        Self::new(value.x() as f64, value.y() as f64)
+        Self::new(value.x() as f32, value.y() as f32)
     }
 }
 
 impl From<Vec2F32> for Vec2f {
     fn from(value: Vec2F32) -> Self {
-        Self::new(value.x as f64, value.y as f64)
+        Self::new(value.x, value.y)
     }
 }
 
 impl From<Vec2I32> for Vec2f {
     fn from(value: Vec2I32) -> Self {
-        Self::new(value.x as f64, value.y as f64)
+        Self::new(value.x as f32, value.y as f32)
     }
 }
 
@@ -117,11 +117,11 @@ impl Sub for Vec2f {
     }
 }
 
-impl Mul<f64> for Vec2f {
+impl Mul<f32> for Vec2f {
     type Output = Self;
 
     #[inline(always)]
-    fn mul(self, rhs: f64) -> Self::Output {
+    fn mul(self, rhs: f32) -> Self::Output {
         Self::new(self.x * rhs, self.y * rhs)
     }
 }
@@ -135,11 +135,11 @@ impl Mul for Vec2f {
     }
 }
 
-impl Div<f64> for Vec2f {
+impl Div<f32> for Vec2f {
     type Output = Self;
 
     #[inline(always)]
-    fn div(self, rhs: f64) -> Self::Output {
+    fn div(self, rhs: f32) -> Self::Output {
         Self::new(self.x / rhs, self.y / rhs)
     }
 }
@@ -262,7 +262,7 @@ impl Vec2i {
 
     #[inline(always)]
     pub fn center(&self) -> Vec2f {
-        Vec2f::new(self.x as f64 + 0.5, self.y as f64 + 0.5)
+        Vec2f::new(self.x as f32 + 0.5, self.y as f32 + 0.5)
     }
 
     #[inline(always)]

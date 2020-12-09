@@ -38,11 +38,11 @@ impl<T: Add<Output=T> + Sub<Output=T> + Default + Copy + Into<f64>> MovingAverag
         self.values.push_back((value, current_tick));
     }
 
-    pub fn get(&self) -> f64 {
+    pub fn get(&self) -> f32 {
         if self.values.len() < 2 {
             0.0
         } else {
-            self.distance.into() / self.duration as f64
+            (self.distance.into() / self.duration as f64) as f32
         }
     }
 }

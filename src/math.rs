@@ -6,8 +6,8 @@ pub trait Square: Mul + Copy {
     }
 }
 
-impl Square for f64 {}
+impl Square for f32 {}
 
-pub fn as_score(value: f64) -> i32 {
+pub fn as_score(value: f32) -> i32 {
     (value * 100000.0).round() as i32
 }

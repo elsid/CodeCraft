@@ -5,7 +5,7 @@ use model::{
 
 use crate::my_strategy::Vec2f;
 
-pub fn add_world_square(position: Vec2f, size: f64, color: Color, vertices: &mut Vec<ColoredVertex>) {
+pub fn add_world_square(position: Vec2f, size: f32, color: Color, vertices: &mut Vec<ColoredVertex>) {
     const SHIFTS: &[Vec2f] = &[
         Vec2f::zero(),
         Vec2f::only_x(1.0),

@@ -21,11 +21,11 @@ impl Stats {
         self.score_rate.add(player.score, world.current_tick());
     }
 
-    pub fn resource_rate(&self) -> f64 {
+    pub fn resource_rate(&self) -> f32 {
         self.resource_rate.get()
     }
 
-    pub fn score_rate(&self) -> f64 {
+    pub fn score_rate(&self) -> f32 {
         self.score_rate.get()
     }
 }

@@ -289,7 +289,7 @@ impl Bot {
         let mut line_vertices = Vec::new();
         for entity in self.world.my_entities() {
             let properties = self.world.get_entity_properties(&entity.entity_type);
-            let position = Vec2f::from(entity.position()) + Vec2f::both(properties.size as f64) / 2.0;
+            let position = Vec2f::from(entity.position()) + Vec2f::both(properties.size as f32) / 2.0;
             debug.send(DebugCommand::Add {
                 data: DebugData::PlacedText {
                     text: format!("{} ({}, {})", entity.id, entity.position.x, entity.position.y),
@@ -408,7 +408,7 @@ impl Bot {
                 text: format!("Resource: {} - {} a - {} r = {}", self.world.my_player().resource, allocated, requested, self.world.my_resource()),
                 vertex: ColoredVertex {
                     world_pos: None,
-                    screen_offset: Vec2f::new(50.0, state.window_size.y as f64 - 50.0).as_model(),
+                    screen_offset: Vec2f::new(50.0, state.window_size.y as f32 - 50.0).as_model(),
                     color: Color { a: 1.0, r: 1.0, g: 1.0, b: 1.0 },
                 },
                 alignment: 0.0,
@@ -424,7 +424,7 @@ impl Bot {
                 text: format!("Population: {} - {} a = {}", self.world.population_use(), self.world.allocated_population(), self.world.my_population()),
                 vertex: ColoredVertex {
                     world_pos: None,
-                    screen_offset: Vec2f::new(50.0, state.window_size.y as f64 - 50.0 - 32.0).as_model(),
+                    screen_offset: Vec2f::new(50.0, state.window_size.y as f32 - 50.0 - 32.0).as_model(),
                     color: Color { a: 1.0, r: 1.0, g: 1.0, b: 1.0 },
                 },
                 alignment: 0.0,
@@ -451,7 +451,7 @@ impl Bot {
                 text: String::from("My entities:"),
                 vertex: ColoredVertex {
                     world_pos: None,
-                    screen_offset: Vec2f::new(state.window_size.x as f64 - 200.0, state.window_size.y as f64 - 50.0).as_model(),
+                    screen_offset: Vec2f::new(state.window_size.x as f32 - 200.0, state.window_size.y as f32 - 50.0).as_model(),
                     color: Color { a: 1.0, r: 1.0, g: 1.0, b: 1.0 },
                 },
                 alignment: 0.0,
@@ -464,7 +464,7 @@ impl Bot {
                     text: format!("{}: {}", entity_type, count),
                     vertex: ColoredVertex {
                         world_pos: None,
-                        screen_offset: Vec2f::new(state.window_size.x as f64 - 200.0, state.window_size.y as f64 - 50.0 - 32.0 * (n + 1) as f64).as_model(),
+                        screen_offset: Vec2f::new(state.window_size.x as f32 - 200.0, state.window_size.y as f32 - 50.0 - 32.0 * (n + 1) as f32).as_model(),
                         color: Color { a: 1.0, r: 1.0, g: 1.0, b: 1.0 },
                     },
                     alignment: 0.0,
