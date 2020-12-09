@@ -26,7 +26,7 @@ pub struct World {
     my_id: i32,
     map_size: i32,
     fog_of_war: bool,
-    entity_properties: HashMap<EntityType, EntityProperties>,
+    entity_properties: Vec<EntityProperties>,
     max_tick_count: i32,
     max_pathfind_nodes: i32,
     current_tick: i32,
@@ -47,11 +47,17 @@ pub struct World {
 
 impl World {
     pub fn new(player_view: &PlayerView) -> Self {
+        let mut entity_properties: Vec<EntityProperties> = std::iter::repeat(EntityProperties::default())
+            .take(player_view.entity_properties.len())
+            .collect();
+        for (entity_type, v) in player_view.entity_properties.iter() {
+            entity_properties[entity_type.clone() as usize] = v.clone();
+        }
         Self {
             my_id: player_view.my_id,
             map_size: player_view.map_size,
             fog_of_war: player_view.fog_of_war,
-            entity_properties: player_view.entity_properties.clone(),
+            entity_properties,
             max_tick_count: player_view.max_tick_count,
             max_pathfind_nodes: player_view.max_pathfind_nodes,
             current_tick: player_view.current_tick,
@@ -113,7 +119,7 @@ impl World {
     }
 
     pub fn get_entity_properties(&self, entity_type: &EntityType) -> &EntityProperties {
-        &self.entity_properties[entity_type]
+        &self.entity_properties[entity_type.clone() as usize]
     }
 
     pub fn players(&self) -> &Vec<Player> {
@@ -183,9 +189,8 @@ impl World {
     }
 
     pub fn my_buildings(&self) -> impl Iterator<Item=&Entity> {
-        let entity_properties = &self.entity_properties;
         self.my_entities()
-            .filter(move |v| !entity_properties[&v.entity_type].can_move)
+            .filter(move |v| !self.get_entity_properties(&v.entity_type).can_move)
     }
 
     pub fn my_bases(&self) -> impl Iterator<Item=&Entity> {
@@ -261,7 +266,7 @@ impl World {
     }
 
     pub fn find_free_space_for(&self, entity_type: &EntityType) -> Option<Vec2i> {
-        let size = self.entity_properties[entity_type].size;
+        let size = self.get_entity_properties(entity_type).size;
         let house = matches!(entity_type, EntityType::House);
         let fit = |map: &Map, position: Vec2i| -> bool {
             if !map.contains(position) || !map.contains(position + Vec2i::both(size)) {
@@ -446,20 +451,20 @@ impl World {
 
     pub fn get_my_units_count(&self) -> usize {
         self.my_entities_count.iter()
-            .filter(|(k, _)| self.entity_properties[k].can_move)
+            .filter(|(k, _)| self.get_entity_properties(k).can_move)
             .map(|(_, v)| *v)
             .sum()
     }
 
     pub fn get_my_buildings_count(&self) -> usize {
         self.my_entities_count.iter()
-            .filter(|(k, _)| !self.entity_properties[k].can_move)
+            .filter(|(k, _)| !self.get_entity_properties(k).can_move)
             .map(|(_, v)| *v)
             .sum()
     }
 
     pub fn get_entity_cost(&self, entity_type: &EntityType) -> i32 {
-        let properties = &self.entity_properties[entity_type];
+        let properties = self.get_entity_properties(entity_type);
         properties.initial_cost + if properties.can_move {
             self.my_entities_count[entity_type] as i32
         } else {
@@ -470,7 +475,7 @@ impl World {
     pub fn is_attacked_by_opponents(&self, position: Vec2i) -> bool {
         self.opponent_entities()
             .filter_map(|entity| {
-                let properties = &self.entity_properties[&entity.entity_type];
+                let properties = self.get_entity_properties(&entity.entity_type);
                 properties.attack.as_ref()
                     .map(|v| (entity.center(properties.size), properties.size / 2 + v.attack_range.max(3)))
             })
@@ -481,7 +486,7 @@ impl World {
 
     pub fn distance_to_nearest_opponent(&self, position: Vec2i) -> Option<i32> {
         self.opponent_entities()
-            .filter(|entity| self.entity_properties[&entity.entity_type].attack.is_some())
+            .filter(|entity| self.get_entity_properties(&entity.entity_type).attack.is_some())
             .map(|entity| entity.position().distance(position))
             .min()
     }
@@ -492,9 +497,9 @@ impl World {
         }
         let result = self.my_entities()
             .filter(|v| is_protected_entity_type(&v.entity_type))
-            .map(|v| {
-                let properties = &self.entity_properties[&v.entity_type];
-                v.center(properties.size).distance(self.start_position)
+            .map(|entity| {
+                let properties = &self.get_entity_properties(&entity.entity_type);
+                entity.center(properties.size).distance(self.start_position)
                     + properties.size / 2
                     + properties.sight_range
             })
