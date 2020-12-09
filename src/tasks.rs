@@ -1,20 +1,10 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
-#[cfg(feature = "enable_debug")]
-use model::{
-    Color,
-    ColoredVertex,
-    DebugCommand,
-    DebugData,
-    DebugState,
-};
 use model::EntityType;
 
-#[cfg(feature = "enable_debug")]
-use crate::DebugInterface;
 use crate::my_strategy::{Group, GroupState, Positionable, Role, Tile, Vec2i, World};
 #[cfg(feature = "enable_debug")]
-use crate::my_strategy::Vec2f;
+use crate::my_strategy::debug;
 
 pub const TARGET_BUILDERS_COUNT: usize = 60;
 
@@ -66,32 +56,10 @@ impl TaskManager {
     }
 
     #[cfg(feature = "enable_debug")]
-    pub fn debug_update(&mut self, state: &DebugState, debug: &mut DebugInterface) {
-        debug.send(DebugCommand::Add {
-            data: DebugData::PlacedText {
-                text: format!("Tasks:"),
-                vertex: ColoredVertex {
-                    world_pos: None,
-                    screen_offset: Vec2f::new(50.0, state.window_size.y as f32 - 50.0 - 32.0 * 2.0).as_model(),
-                    color: Color { a: 1.0, r: 1.0, g: 1.0, b: 1.0 },
-                },
-                alignment: 0.0,
-                size: 26.0,
-            },
-        });
+    pub fn debug_update(&self, debug: &mut debug::Debug) {
+        debug.add_static_text(format!("Tasks:"));
         for i in 0..self.order.len() {
-            debug.send(DebugCommand::Add {
-                data: DebugData::PlacedText {
-                    text: format!("{}) {:?}", i, self.tasks[&self.order[i]]),
-                    vertex: ColoredVertex {
-                        world_pos: None,
-                        screen_offset: Vec2f::new(70.0, state.window_size.y as f32 - 50.0 - (i + 3) as f32 * 32.0).as_model(),
-                        color: Color { a: 1.0, r: 1.0, g: 1.0, b: 1.0 },
-                    },
-                    alignment: 0.0,
-                    size: 26.0,
-                },
-            });
+            debug.add_static_text(format!("{}) {:?}", i, self.tasks[&self.order[i]]));
         }
     }
 

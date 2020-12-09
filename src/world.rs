@@ -8,9 +8,9 @@ use model::{
     Player,
     PlayerView,
 };
-
 #[cfg(feature = "enable_debug")]
-use crate::DebugInterface;
+use model::Color;
+
 use crate::my_strategy::{
     is_entity_base,
     is_entity_unit,
@@ -19,6 +19,8 @@ use crate::my_strategy::{
     Tile,
     Vec2i,
 };
+#[cfg(feature = "enable_debug")]
+use crate::my_strategy::{debug, Vec2f};
 
 pub struct World {
     my_id: i32,
@@ -374,8 +376,40 @@ impl World {
     }
 
     #[cfg(feature = "enable_debug")]
-    pub fn debug_update(&self, debug: &mut DebugInterface) {
+    pub fn debug_update(&self, debug: &mut debug::Debug) {
+        use std::collections::{btree_map, BTreeMap};
+
+        debug.add_static_text(format!("Tick {}", self.current_tick));
+        let allocated = self.allocated_resource();
+        let requested = self.requested_resource();
+        debug.add_static_text(format!("Resource: {} - {} a - {} r = {}", self.my_player().resource, allocated, requested, self.my_resource()));
+        debug.add_static_text(format!("Population: {} - {} a = {}", self.population_use(), self.allocated_population(), self.my_population()));
+        let mut count_by_entity_type: BTreeMap<String, usize> = BTreeMap::new();
+        for entity in self.my_entities() {
+            match count_by_entity_type.entry(format!("{:?}", entity.entity_type)) {
+                btree_map::Entry::Vacant(v) => {
+                    v.insert(1);
+                }
+                btree_map::Entry::Occupied(mut v) => {
+                    *v.get_mut() += 1;
+                }
+            }
+        }
+        debug.add_static_text(String::from("My entities:"));
+        for (entity_type, count) in count_by_entity_type.iter() {
+            debug.add_static_text(format!("{}: {}", entity_type, count));
+        }
         self.map.borrow().debug_update(debug);
+        debug.add_world_line(
+            self.start_position.center() - Vec2f::both(0.5),
+            self.start_position.center() + Vec2f::both(0.5),
+            Color { a: 1.0, r: 0.0, g: 0.0, b: 1.0 },
+        );
+        debug.add_world_line(
+            self.start_position.center() - Vec2f::both(0.5).left(),
+            self.start_position.center() + Vec2f::both(0.5).left(),
+            Color { a: 1.0, r: 0.0, g: 0.0, b: 1.0 },
+        );
     }
 
     pub fn get_my_entity_count_of(&self, entity_type: &EntityType) -> usize {

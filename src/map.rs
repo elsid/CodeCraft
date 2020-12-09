@@ -1,21 +1,12 @@
 use std::iter::repeat;
 
 #[cfg(feature = "enable_debug")]
-use model::{
-    Color,
-    DebugCommand,
-    DebugData,
-    PrimitiveType,
-};
+use model::Color;
 use model::PlayerView;
 
-#[cfg(feature = "enable_debug")]
-use crate::DebugInterface;
 use crate::my_strategy::{Positionable, Vec2i};
 #[cfg(feature = "enable_debug")]
-use crate::my_strategy::debug;
-#[cfg(feature = "enable_debug")]
-use crate::my_strategy::Vec2f;
+use crate::my_strategy::{debug, Vec2f};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Tile {
@@ -123,7 +114,7 @@ impl Map {
     }
 
     fn get_tile_index(&self, position: Vec2i) -> usize {
-        position.x() as usize + position.y() as usize * self.size
+        position_to_index(position, self.size)
     }
 
     pub fn find_inside_square<F: FnMut(Vec2i, Tile, bool) -> bool>(&self, position: Vec2i, size: i32, mut f: F) -> Option<Vec2i> {
@@ -178,38 +169,38 @@ impl Map {
     }
 
     #[cfg(feature = "enable_debug")]
-    pub fn debug_update(&self, debug: &mut DebugInterface) {
-        let mut vertices = Vec::new();
-        find_inside_rect(
-            Vec2i::zero(),
-            Vec2i::both(self.size as i32),
-            |position| {
-                let color = match self.get_tile(position) {
-                    Tile::Empty => Some(Color { a: 0.15, r: 0.0, g: 1.0, b: 1.0 }),
-                    Tile::Entity(..) => Some(Color { a: 0.25, r: 1.0, g: 0.0, b: 1.0 }),
-                    _ => None,
-                };
-                if let Some(color) = color {
-                    debug::add_world_square(Vec2f::from(position), 1.0, color, &mut vertices);
-                }
-                if self.is_tile_locked(position) {
-                    debug::add_world_square(
-                        Vec2f::from(position),
-                        1.0,
-                        Color { a: 0.5, r: 0.5, g: 0.0, b: 0.0 },
-                        &mut vertices,
-                    );
-                }
-                false
-            },
-        );
-        debug.send(DebugCommand::Add {
-            data: DebugData::Primitives {
-                vertices,
-                primitive_type: PrimitiveType::Triangles,
+    pub fn debug_update(&self, debug: &mut debug::Debug) {
+        for i in 0..self.tiles.len() {
+            let position = index_to_position(i, self.size);
+            let color = match self.tiles[i] {
+                Tile::Empty => Some(Color { a: 0.15, r: 0.0, g: 1.0, b: 1.0 }),
+                Tile::Entity(..) => Some(Color { a: 0.25, r: 1.0, g: 0.0, b: 1.0 }),
+                _ => None,
+            };
+            if let Some(color) = color {
+                debug.add_world_square(
+                    Vec2f::from(position) + Vec2f::new(0.25, 0.25),
+                    0.5,
+                    color,
+                );
             }
-        });
+            if self.locked[i] {
+                debug.add_world_square(
+                    Vec2f::from(position) + Vec2f::new(0.25, 0.25),
+                    0.5,
+                    Color { a: 0.5, r: 0.5, g: 0.0, b: 0.0 },
+                );
+            }
+        }
     }
+}
+
+pub fn position_to_index(position: Vec2i, size: usize) -> usize {
+    position.x() as usize + position.y() as usize * size
+}
+
+pub fn index_to_position(index: usize, size: usize) -> Vec2i {
+    Vec2i::new((index % size as usize) as i32, (index / size as usize) as i32)
 }
 
 pub fn find_neighbour<F: FnMut(Vec2i) -> bool>(position: Vec2i, size: i32, mut f: F) -> Option<Vec2i> {

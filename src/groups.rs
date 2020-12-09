@@ -44,6 +44,10 @@ impl Group {
         self.id
     }
 
+    pub fn has(&self) -> &HashMap<EntityType, usize> {
+        &self.has
+    }
+
     pub fn update(&mut self, world: &World) {
         let absent: Vec<i32> = self.units.keys().cloned().filter(|v| !world.contains_entity(*v)).collect();
         for unit_id in absent.iter() {

@@ -1,7 +1,3 @@
-#[cfg(feature = "enable_debug")]
-use std::collections::btree_map;
-#[cfg(feature = "enable_debug")]
-use std::collections::BTreeMap;
 use std::collections::hash_map;
 use std::collections::HashMap;
 
@@ -12,14 +8,7 @@ use model::{
     PlayerView,
 };
 #[cfg(feature = "enable_debug")]
-use model::{
-    Color,
-    ColoredVertex,
-    DebugCommand,
-    DebugData,
-    DebugState,
-    PrimitiveType,
-};
+use model::{Color, DebugState};
 
 #[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
@@ -36,11 +25,10 @@ use crate::my_strategy::{
 };
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
+    debug,
     Vec2f,
     Vec2i,
 };
-#[cfg(feature = "enable_debug")]
-use crate::my_strategy::debug;
 
 pub struct Bot {
     stats: Vec<(i32, Stats)>,
@@ -77,15 +65,14 @@ impl Bot {
     }
 
     #[cfg(feature = "enable_debug")]
-    pub fn debug_update(&mut self, state: &DebugState, debug: &mut DebugInterface) {
-        self.world.debug_update(debug);
-        self.debug_update_start_position(debug);
-        self.debug_update_groups(debug);
-        self.debug_update_entities(debug);
-        self.debug_update_resources(state, debug);
-        self.debug_update_population(state, debug);
-        self.debug_update_entities_stats(state, debug);
-        self.tasks.debug_update(state, debug);
+    pub fn debug_update(&self, state: &DebugState, debug_interface: &mut DebugInterface) {
+        let mut debug = debug::Debug::new(state);
+        self.world.debug_update(&mut debug);
+        debug.add_static_text(format!("Opening: {}", self.opening));
+        self.debug_update_groups(&mut debug);
+        self.debug_update_entities(&mut debug);
+        self.tasks.debug_update(&mut debug);
+        debug.send(debug_interface);
     }
 
     fn update(&mut self, player_view: &PlayerView) {
@@ -285,42 +272,28 @@ impl Bot {
     }
 
     #[cfg(feature = "enable_debug")]
-    fn debug_update_entities(&mut self, debug: &mut DebugInterface) {
-        let mut line_vertices = Vec::new();
+    fn debug_update_entities(&self, debug: &mut debug::Debug) {
         for entity in self.world.my_entities() {
             let properties = self.world.get_entity_properties(&entity.entity_type);
             let position = Vec2f::from(entity.position()) + Vec2f::both(properties.size as f32) / 2.0;
-            debug.send(DebugCommand::Add {
-                data: DebugData::PlacedText {
-                    text: format!("{} ({}, {})", entity.id, entity.position.x, entity.position.y),
-                    vertex: ColoredVertex {
-                        world_pos: Some(position.as_model()),
-                        screen_offset: Vec2f::zero().as_model(),
-                        color: Color { a: 1.0, r: 1.0, g: 0.5, b: 0.0 },
-                    },
-                    alignment: 0.5,
-                    size: 26.0,
-                },
-            });
-            debug.send(DebugCommand::Add {
-                data: DebugData::PlacedText {
-                    text: format!("Role: {:?}", self.roles.get(&entity.id)),
-                    vertex: ColoredVertex {
-                        world_pos: Some(position.as_model()),
-                        screen_offset: Vec2f::only_y(-28.0).as_model(),
-                        color: Color { a: 1.0, r: 1.0, g: 0.5, b: 0.0 },
-                    },
-                    alignment: 0.5,
-                    size: 26.0,
-                },
-            });
+            debug.add_world_text(
+                format!("{} ({}, {})", entity.id, entity.position.x, entity.position.y),
+                position,
+                Vec2f::zero(),
+                Color { a: 1.0, r: 1.0, g: 0.5, b: 0.0 },
+            );
+            debug.add_world_text(
+                format!("Role: {:?}", self.roles.get(&entity.id)),
+                position,
+                Vec2f::only_y(-28.0),
+                Color { a: 1.0, r: 1.0, g: 0.5, b: 0.0 },
+            );
             if let Some(role) = self.roles.get(&entity.id) {
                 match role {
-                    Role::Harvester { position: v } => debug::add_world_line(
+                    Role::Harvester { position: v } => debug.add_world_line(
                         position,
                         v.center(),
                         Color { a: 1.0, r: 1.0, g: 0.0, b: 0.0 },
-                        &mut line_vertices,
                     ),
                     _ => (),
                 }
@@ -337,195 +310,55 @@ impl Bot {
                     text += "Repair ";
                 }
                 if let Some(move_action) = action.move_action.as_ref() {
-                    debug::add_world_line(
+                    debug.add_world_line(
                         position,
                         Vec2i::from(move_action.target.clone()).center(),
                         Color { a: 1.0, r: 0.0, g: 1.0, b: 0.0 },
-                        &mut line_vertices,
                     );
                     text += "Move ";
                 }
-                debug.send(DebugCommand::Add {
-                    data: DebugData::PlacedText {
-                        text: format!("Action: {}", text),
-                        vertex: ColoredVertex {
-                            world_pos: Some(position.as_model()),
-                            screen_offset: Vec2f::only_y(-2.0 * 28.0).as_model(),
-                            color: Color { a: 1.0, r: 1.0, g: 0.5, b: 0.0 },
-                        },
-                        alignment: 0.5,
-                        size: 26.0,
-                    },
-                });
+                debug.add_world_text(
+                    format!("Action: {}", text),
+                    position,
+                    Vec2f::only_y(-2.0 * 28.0),
+                    Color { a: 1.0, r: 1.0, g: 0.5, b: 0.0 },
+                );
             }
         }
-        debug.send(DebugCommand::Add {
-            data: DebugData::Primitives {
-                vertices: line_vertices,
-                primitive_type: PrimitiveType::Lines,
-            }
-        });
     }
 
     #[cfg(feature = "enable_debug")]
-    fn debug_update_start_position(&mut self, debug: &mut DebugInterface) {
-        let start_position = self.world.start_position();
-        debug.send(DebugCommand::Add {
-            data: DebugData::Primitives {
-                vertices: vec![
-                    ColoredVertex {
-                        world_pos: Some((start_position.center() - Vec2f::both(0.5)).as_model()),
-                        screen_offset: Vec2f::zero().as_model(),
-                        color: Color { a: 1.0, r: 0.0, g: 0.0, b: 1.0 },
-                    },
-                    ColoredVertex {
-                        world_pos: Some((start_position.center() + Vec2f::both(0.5)).as_model()),
-                        screen_offset: Vec2f::zero().as_model(),
-                        color: Color { a: 1.0, r: 0.0, g: 0.0, b: 1.0 },
-                    },
-                    ColoredVertex {
-                        world_pos: Some((start_position.center() - Vec2f::both(0.5).left()).as_model()),
-                        screen_offset: Vec2f::zero().as_model(),
-                        color: Color { a: 1.0, r: 0.0, g: 0.0, b: 1.0 },
-                    },
-                    ColoredVertex {
-                        world_pos: Some((start_position.center() + Vec2f::both(0.5).left()).as_model()),
-                        screen_offset: Vec2f::zero().as_model(),
-                        color: Color { a: 1.0, r: 0.0, g: 0.0, b: 1.0 },
-                    }
-                ],
-                primitive_type: PrimitiveType::Lines,
-            }
-        });
-    }
-
-    #[cfg(feature = "enable_debug")]
-    fn debug_update_resources(&mut self, state: &DebugState, debug: &mut DebugInterface) {
-        let allocated = self.world.allocated_resource();
-        let requested = self.world.requested_resource();
-        debug.send(DebugCommand::Add {
-            data: DebugData::PlacedText {
-                text: format!("Resource: {} - {} a - {} r = {}", self.world.my_player().resource, allocated, requested, self.world.my_resource()),
-                vertex: ColoredVertex {
-                    world_pos: None,
-                    screen_offset: Vec2f::new(50.0, state.window_size.y as f32 - 50.0).as_model(),
-                    color: Color { a: 1.0, r: 1.0, g: 1.0, b: 1.0 },
-                },
-                alignment: 0.0,
-                size: 26.0,
-            },
-        });
-    }
-
-    #[cfg(feature = "enable_debug")]
-    fn debug_update_population(&mut self, state: &DebugState, debug: &mut DebugInterface) {
-        debug.send(DebugCommand::Add {
-            data: DebugData::PlacedText {
-                text: format!("Population: {} - {} a = {}", self.world.population_use(), self.world.allocated_population(), self.world.my_population()),
-                vertex: ColoredVertex {
-                    world_pos: None,
-                    screen_offset: Vec2f::new(50.0, state.window_size.y as f32 - 50.0 - 32.0).as_model(),
-                    color: Color { a: 1.0, r: 1.0, g: 1.0, b: 1.0 },
-                },
-                alignment: 0.0,
-                size: 26.0,
-            },
-        });
-    }
-
-    #[cfg(feature = "enable_debug")]
-    fn debug_update_entities_stats(&mut self, state: &DebugState, debug: &mut DebugInterface) {
-        let mut count_by_entity_type: BTreeMap<String, usize> = BTreeMap::new();
-        for entity in self.world.my_entities() {
-            match count_by_entity_type.entry(format!("{:?}", entity.entity_type)) {
-                btree_map::Entry::Vacant(v) => {
-                    v.insert(1);
-                }
-                btree_map::Entry::Occupied(mut v) => {
-                    *v.get_mut() += 1;
-                }
-            }
-        }
-        debug.send(DebugCommand::Add {
-            data: DebugData::PlacedText {
-                text: String::from("My entities:"),
-                vertex: ColoredVertex {
-                    world_pos: None,
-                    screen_offset: Vec2f::new(state.window_size.x as f32 - 200.0, state.window_size.y as f32 - 50.0).as_model(),
-                    color: Color { a: 1.0, r: 1.0, g: 1.0, b: 1.0 },
-                },
-                alignment: 0.0,
-                size: 26.0,
-            },
-        });
-        for (n, (entity_type, count)) in count_by_entity_type.iter().enumerate() {
-            debug.send(DebugCommand::Add {
-                data: DebugData::PlacedText {
-                    text: format!("{}: {}", entity_type, count),
-                    vertex: ColoredVertex {
-                        world_pos: None,
-                        screen_offset: Vec2f::new(state.window_size.x as f32 - 200.0, state.window_size.y as f32 - 50.0 - 32.0 * (n + 1) as f32).as_model(),
-                        color: Color { a: 1.0, r: 1.0, g: 1.0, b: 1.0 },
-                    },
-                    alignment: 0.0,
-                    size: 26.0,
-                },
-            });
-        }
-    }
-
-    #[cfg(feature = "enable_debug")]
-    fn debug_update_groups(&mut self, debug: &mut DebugInterface) {
-        let mut triangle_vertices = Vec::new();
-        let mut line_vertices = Vec::new();
+    fn debug_update_groups(&self, debug: &mut debug::Debug) {
         for group in self.groups.values() {
             if group.is_empty() {
                 continue;
             }
-            let center = group.get_center(&self.world).center();
+            let center = group.get_center(&self.world);
             if let Some(target) = group.target() {
-                debug::add_world_line(
-                    center,
+                debug.add_world_line(
+                    center.center(),
                     target.center(),
                     Color { a: 0.75, r: 0.0, g: 0.0, b: 0.5 },
-                    &mut line_vertices,
                 );
             }
-            debug::add_world_rectangle(
+            debug.add_world_rectangle(
                 Vec2f::from(group.get_bounds_min(&self.world)),
                 Vec2f::from(group.get_bounds_max(&self.world)),
                 Color { a: 0.15, r: 0.0, g: 0.0, b: 1.0 },
-                &mut triangle_vertices,
+            );
+            debug.add_world_text(
+                format!("Group {}", group.id()),
+                center.center(),
+                Vec2f::zero(),
+                Color { a: 0.9, r: 1.0, g: 0.5, b: 0.25 },
             );
         }
-        debug.send(DebugCommand::Add {
-            data: DebugData::Primitives {
-                vertices: triangle_vertices,
-                primitive_type: PrimitiveType::Triangles,
-            }
-        });
-        debug.send(DebugCommand::Add {
-            data: DebugData::Primitives {
-                vertices: line_vertices,
-                primitive_type: PrimitiveType::Lines,
-            }
-        });
-        for (group_id, group) in self.groups.iter() {
-            if group.is_empty() {
-                continue;
-            }
-            debug.send(DebugCommand::Add {
-                data: DebugData::PlacedText {
-                    text: format!("Group {}", group_id),
-                    vertex: ColoredVertex {
-                        world_pos: Some(group.get_center(&self.world).center().as_model()),
-                        screen_offset: Vec2f::zero().as_model(),
-                        color: Color { a: 1.0, r: 1.0, g: 0.5, b: 0.25 },
-                    },
-                    alignment: 0.5,
-                    size: 26.0,
-                },
-            });
+        debug.add_static_text(String::from("My groups:"));
+        let mut group_ids: Vec<usize> = self.groups.keys().cloned().collect();
+        group_ids.sort();
+        for group_id in group_ids.iter() {
+            let group = &self.groups[group_id];
+            debug.add_static_text(format!("{}: has={:?} target={:?}", group.id(), group.has(), group.target()));
         }
     }
 }
