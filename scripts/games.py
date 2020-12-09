@@ -32,11 +32,13 @@ import itertools
 @click.option('--verbose', is_flag=True)
 @click.option('--timeout', default=120, type=int)
 @click.option('--seed', default=None, type=int)
+@click.option('--config_path', default=None, type=click.Path(exists=True, dir_okay=False))
 def main(**kwargs):
     run(**kwargs)
 
 
-def run(players, game_type, runner_bin_path, start_port, workers, max_runs, prefix, output_path, verbose, timeout, seed):
+def run(players, game_type, runner_bin_path, start_port, workers, max_runs, prefix, output_path,
+        verbose, timeout, seed, config_path):
     players = tuple(parse_players(text=players, start_port=start_port))
     session = f"{prefix}.{game_type}.{format_players(players)}.{start_port}.{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     games_path = os.path.join(output_path, game_type, session)
@@ -52,6 +54,7 @@ def run(players, game_type, runner_bin_path, start_port, workers, max_runs, pref
                 game_type=game_type,
                 seed=random.randint(0, 2**64 - 1) if seed is None else seed,
                 output_path=os.path.join(games_path, '%s.%s' % (number, int(time.time() * 1e6))),
+                config_path=config_path,
             ),
             players=players_permutations[number % len(players_permutations)],
         ))
@@ -106,6 +109,7 @@ Runner = collections.namedtuple('Runner', (
     'game_type',
     'seed',
     'output_path',
+    'config_path',
 ))
 
 
@@ -215,6 +219,7 @@ def handle_task(task, port_shift, verbose, stop, timeout):
                         verbose=verbose,
                         stop=stop_worker,
                         timeout=timeout,
+                        config_path=task.runner.config_path,
                     ),
                 ),
                 stop=stop_worker,
@@ -243,9 +248,11 @@ def format_player_name(player):
     return f'{player.type}:{player.start_port}:{os.path.split(player.bin_path)[-1]}'
 
 
-def run_player(bin_path, port, verbose, stop, timeout):
+def run_player(bin_path, port, verbose, stop, timeout, config_path):
     env = os.environ.copy()
     env['RUST_BACKTRACE'] = '1'
+    if config_path is not None:
+        env['CONFIG'] = str(config_path)
     args = [os.path.abspath(bin_path), '127.0.0.1', str(port)]
     fails = 0
     while fails < 3 and not stop.is_set():
