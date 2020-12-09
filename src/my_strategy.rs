@@ -74,12 +74,16 @@ pub mod bot;
 
 pub struct MyStrategy {
     bot: Option<Bot>,
+    #[cfg(feature = "write_player_view")]
+    player_view_file: std::fs::File,
 }
 
 impl MyStrategy {
     pub fn new() -> Self {
         Self {
             bot: None,
+            #[cfg(feature = "write_player_view")]
+            player_view_file: std::fs::File::create("player_view.json").unwrap(),
         }
     }
 
@@ -88,6 +92,8 @@ impl MyStrategy {
         player_view: &model::PlayerView,
         _debug_interface: Option<&mut DebugInterface>,
     ) -> model::Action {
+        #[cfg(feature = "write_player_view")]
+            self.write_player_view(player_view);
         if self.bot.is_none() {
             self.bot = Some(Bot::new(World::new(&player_view)));
         }
@@ -114,5 +120,12 @@ impl MyStrategy {
         debug_interface.send(model::DebugCommand::Clear {});
         let state = debug_interface.get_state();
         self.bot.as_mut().map(|v| v.debug_update(&state, debug_interface));
+    }
+
+    #[cfg(feature = "write_player_view")]
+    fn write_player_view(&mut self, player_view: &model::PlayerView) {
+        use std::io::Write;
+        serde_json::to_writer(&mut self.player_view_file, &player_view).unwrap();
+        self.player_view_file.write(b"\n").unwrap();
     }
 }
