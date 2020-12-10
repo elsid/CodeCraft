@@ -66,6 +66,9 @@ impl Bot {
 
     #[cfg(feature = "enable_debug")]
     pub fn debug_update(&self, state: &DebugState, debug_interface: &mut DebugInterface) {
+        if self.world.current_tick() == 0 {
+            debug_interface.send(model::DebugCommand::SetAutoFlush { enable: false });
+        }
         let mut debug = debug::Debug::new(state);
         self.world.debug_update(&mut debug);
         debug.add_static_text(format!("Opening: {}", self.opening));

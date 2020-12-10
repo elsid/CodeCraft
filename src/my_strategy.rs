@@ -117,7 +117,6 @@ impl MyStrategy {
         _player_view: &model::PlayerView,
         debug_interface: &mut DebugInterface,
     ) {
-        debug_interface.send(model::DebugCommand::Clear {});
         let state = debug_interface.get_state();
         self.bot.as_mut().map(|v| v.debug_update(&state, debug_interface));
     }

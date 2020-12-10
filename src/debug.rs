@@ -104,6 +104,7 @@ impl<'a> Debug<'a> {
     }
 
     pub fn send(&mut self, debug: &mut DebugInterface) {
+        debug.send(model::DebugCommand::Clear {});
         if !self.triangle_vertices.is_empty() {
             debug.send(DebugCommand::Add {
                 data: DebugData::Primitives {
@@ -132,5 +133,6 @@ impl<'a> Debug<'a> {
                 debug.send(DebugCommand::Add { data: data.clone() });
             }
         }
+        debug.send(model::DebugCommand::Flush {});
     }
 }
