@@ -49,6 +49,7 @@ impl Vec2f {
         self.y
     }
 
+    #[inline(always)]
     pub const fn as_model(&self) -> Vec2F32 {
         Vec2F32 { x: self.x as f32, y: self.y as f32 }
     }
@@ -219,6 +220,7 @@ impl Vec2i {
         Self { x: value, y: value }
     }
 
+    #[inline(always)]
     pub const fn as_model(&self) -> Vec2I32 {
         Vec2I32 { x: self.x, y: self.y }
     }
