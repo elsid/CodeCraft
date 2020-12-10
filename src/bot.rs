@@ -12,17 +12,7 @@ use model::{Color, DebugState};
 
 #[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
-use crate::my_strategy::{
-    Group,
-    GroupStatus,
-    is_protected_entity_type,
-    Positionable,
-    Role,
-    Stats,
-    Task,
-    TaskManager,
-    World,
-};
+use crate::my_strategy::{Group, GroupState, is_protected_entity_type, Positionable, Role, Stats, Task, TaskManager, World};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
@@ -84,7 +74,7 @@ impl Bot {
         self.update_roles();
         self.update_groups();
         self.update_tasks();
-        self.set_group_targets();
+        self.update_group_targets();
     }
 
     fn update_stats(&mut self) {
@@ -114,9 +104,9 @@ impl Bot {
         for group in self.groups.values_mut() {
             group.update(world);
         }
-        self.groups.retain(|_, group| match group.status() {
-            GroupStatus::Defensive => true,
-            GroupStatus::Aggressive => !group.is_empty(),
+        self.groups.retain(|_, group| match group.state() {
+            GroupState::New => true,
+            _ => !group.is_empty(),
         });
     }
 
@@ -228,21 +218,17 @@ impl Bot {
         }
     }
 
-    fn set_group_targets(&mut self) {
+    fn update_group_targets(&mut self) {
         for group in self.groups.values_mut() {
-            if group.units_count() < group.need_count() ||
-                self.world.get_my_entity_count_of(&EntityType::MeleeUnit) + self.world.get_my_entity_count_of(&EntityType::RangedUnit) < 15 {
-                group.set_status(GroupStatus::Defensive);
-            } else {
-                group.set_status(GroupStatus::Aggressive);
-            }
             if group.is_empty() {
                 continue;
             }
+            let defend = group.units_count() < group.need_count() ||
+                self.world.get_my_entity_count_of(&EntityType::MeleeUnit) + self.world.get_my_entity_count_of(&EntityType::RangedUnit) < 15;
             let position = group.get_center(&self.world);
             let world = &self.world;
-            match group.status() {
-                GroupStatus::Defensive => if let Some(target) = self.world.opponent_entities()
+            if defend {
+                if let Some(target) = self.world.opponent_entities()
                     .filter(|v| {
                         world.is_inside_protected_perimeter(v.center(world.get_entity_properties(&v.entity_type).size))
                     })
@@ -265,7 +251,8 @@ impl Bot {
                         .unwrap_or(self.world.start_position());
                     group.set_target(Some(target));
                 }
-                GroupStatus::Aggressive => if let Some(target) = self.world.opponent_entities()
+            } else {
+                if let Some(target) = self.world.opponent_entities()
                     .min_by_key(|v| (v.center(world.get_entity_properties(&v.entity_type).size).distance(position), v.id)) {
                     group.set_target(Some(target.position()));
                 } else {

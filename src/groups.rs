@@ -5,12 +5,6 @@ use model::EntityType;
 use crate::my_strategy::{Positionable, Vec2i, World};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub enum GroupStatus {
-    Defensive,
-    Aggressive,
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum GroupState {
     New,
     Ready,
@@ -19,7 +13,6 @@ pub enum GroupState {
 #[derive(Debug)]
 pub struct Group {
     id: usize,
-    status: GroupStatus,
     state: GroupState,
     target: Option<Vec2i>,
     has: HashMap<EntityType, usize>,
@@ -31,7 +24,6 @@ impl Group {
     pub fn new(id: usize, need: HashMap<EntityType, usize>) -> Self {
         Self {
             id,
-            status: GroupStatus::Defensive,
             state: GroupState::New,
             target: None,
             has: need.keys().cloned().map(|v| (v, 0)).collect(),
@@ -104,14 +96,6 @@ impl Group {
 
     pub fn state(&self) -> GroupState {
         self.state
-    }
-
-    pub fn set_status(&mut self, value: GroupStatus) {
-        self.status = value;
-    }
-
-    pub fn status(&self) -> GroupStatus {
-        self.status
     }
 
     pub fn get_center(&self, world: &World) -> Vec2i {
