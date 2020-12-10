@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 use model::{
     Action,
+    Entity,
     EntityAction,
     EntityType,
     PlayerView,
@@ -12,7 +13,7 @@ use model::{Color, DebugState};
 
 #[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
-use crate::my_strategy::{Config, EntityField, Field, Group, GroupField, GroupState, InfluenceField, is_protected_entity_type, Path, Positionable, Rect, Role, Stats, Task, TaskManager, Vec2i, visit_range, World};
+use crate::my_strategy::{Config, EntityField, Field, Group, GroupField, GroupState, InfluenceField, is_protected_entity_type, Path, Positionable, Rect, Role, Stats, Task, TaskManager, Tile, Vec2i, visit_range, World};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
@@ -35,6 +36,7 @@ pub struct Bot {
     group_fields: Vec<GroupField>,
     entity_fields: HashMap<i32, EntityField>,
     path: Path,
+    entity_targets: HashMap<i32, Vec2i>,
 }
 
 impl Bot {
@@ -54,6 +56,7 @@ impl Bot {
             config,
             group_fields: Vec::new(),
             entity_fields: HashMap::new(),
+            entity_targets: HashMap::new(),
         }
     }
 
@@ -75,6 +78,8 @@ impl Bot {
         let mut features: Vec<String> = Vec::new();
         #[cfg(feature = "use_group_field")]
             features.push(String::from("use_group_field"));
+        #[cfg(feature = "use_entity_field")]
+            features.push(String::from("use_entity_field"));
         debug.add_static_text(format!("Features: {:?}", features));
         self.world.debug_update(&mut debug);
         self.influence_field.debug_update(&mut debug);
@@ -99,12 +104,15 @@ impl Bot {
         self.update_stats();
         self.update_roles();
         self.update_groups();
-        #[cfg(feature = "use_group_field")]
+        #[cfg(any(feature = "use_group_field", feature = "use_entity_field"))]
             self.field.update(&self.groups, &self.world);
         #[cfg(feature = "use_group_field")]
             self.update_group_fields();
+        #[cfg(feature = "use_entity_field")]
+            self.update_entity_fields();
         self.update_tasks();
         self.update_group_targets();
+        self.update_entity_targets();
     }
 
     fn update_stats(&mut self) {
@@ -152,9 +160,11 @@ impl Bot {
         let world = &self.world;
         self.entity_fields.retain(|k, _| world.contains_entity(*k));
         for entity in self.world.my_entities() {
-            self.entity_fields.entry(entity.id)
-                .or_insert_with(|| EntityField::new(world.map_size()))
-                .update(entity, &self.field, world);
+            if matches!(entity.entity_type, EntityType::MeleeUnit) || matches!(entity.entity_type, EntityType::RangedUnit) {
+                self.entity_fields.entry(entity.id)
+                    .or_insert_with(|| EntityField::new(world.map_size()))
+                    .update(entity, &self.field, world);
+            }
         }
     }
 
@@ -173,7 +183,7 @@ impl Bot {
         self.world.my_entities()
             .filter_map(|entity| {
                 self.roles.get(&entity.id)
-                    .map(|role| (entity.id, role.get_action(entity, &self.world, &self.groups)))
+                    .map(|role| (entity.id, role.get_action(entity, &self.world, &self.groups, &self.entity_targets)))
             })
             .filter(|(entity_id, action)| {
                 self.actions.get(&entity_id).map(|v| *v != *action).unwrap_or(true)
@@ -355,6 +365,133 @@ impl Bot {
         optimal_position
     }
 
+    fn update_entity_targets(&mut self) {
+        let mut result: Vec<(i32, Vec2i)> = Vec::new();
+        for entity in self.world.my_entities() {
+            if let Some(target) = self.get_entity_target(entity, &result) {
+                result.push((entity.id, target));
+            }
+        }
+        self.entity_targets.clear();
+        for (entity_id, target) in result.into_iter() {
+            self.entity_targets.insert(entity_id, target);
+        }
+    }
+
+    fn get_entity_target(&self, entity: &Entity, busy: &Vec<(i32, Vec2i)>) -> Option<Vec2i> {
+        let properties = self.world.get_entity_properties(&entity.entity_type);
+        if let Role::GroupMember { group_id } = &self.roles[&entity.id] {
+            let opponent_nearby = self.world.find_in_map_range(entity.position(), properties.size, properties.sight_range, |_, tile, _| {
+                if let Tile::Entity(entity_id) = tile {
+                    let other = self.world.get_entity(entity_id);
+                    (matches!(other.entity_type, EntityType::RangedUnit)
+                        || matches!(other.entity_type, EntityType::MeleeUnit)
+                        || matches!(other.entity_type, EntityType::Turret))
+                        && other.player_id.map(|v| v != self.world.my_id()).unwrap_or(false)
+                } else {
+                    false
+                }
+            }).is_some();
+            if !opponent_nearby {
+                let group = self.groups.iter().find(|v| v.id() == *group_id).unwrap();
+                if let Some(group_target) = group.target()
+                    .filter(|target| target.distance(entity.position()) <= properties.sight_range) {
+                    let mut min_distance = std::i32::MAX;
+                    let mut nearest_free_position = None;
+                    self.world.visit_map_range(group_target, properties.size, properties.sight_range, |position, tile, locked| {
+                        if locked || busy.iter().any(|(_, v)| *v == position) {
+                            return;
+                        }
+                        if let Tile::Entity(entity_id) = tile {
+                            if entity_id != entity.id {
+                                return;
+                            }
+                        }
+                        let distance = position.distance(group_target);
+                        if min_distance > distance {
+                            min_distance = distance;
+                            nearest_free_position = Some(position);
+                        }
+                    });
+                    if let Some(nearest_free_position) = nearest_free_position {
+                        return Some(nearest_free_position);
+                    }
+                }
+            }
+        }
+        if cfg!(feature = "use_entity_field") {
+            self.get_entity_target_by_entity_field(entity, busy)
+        } else {
+            None
+        }
+    }
+
+    fn get_entity_target_naive(&self, unit: &Entity) -> Vec2i {
+        let position = unit.position();
+        let world = &self.world;
+        if self.world.get_my_entity_count_of(&EntityType::MeleeUnit) + self.world.get_my_entity_count_of(&EntityType::RangedUnit) < 15 {
+            if let Some(target) = self.world.opponent_entities()
+                .filter(|v| {
+                    world.is_inside_protected_perimeter(v.center(world.get_entity_properties(&v.entity_type).size))
+                })
+                .min_by_key(|entity| {
+                    let properties = world.get_entity_properties(&entity.entity_type);
+                    let entity_center = entity.center(properties.size);
+                    let distance_to_my_entity = world.my_entities()
+                        .filter(|v| is_protected_entity_type(&v.entity_type))
+                        .map(|v| v.center(world.get_entity_properties(&v.entity_type).size).distance(entity_center))
+                        .min();
+                    (distance_to_my_entity, entity_center.distance(position), entity.id)
+                }) {
+                target.position()
+            } else {
+                self.world.my_turrets()
+                    .min_by_key(|v| {
+                        v.center(world.get_entity_properties(&v.entity_type).size).distance(position)
+                    })
+                    .map(|v| v.position())
+                    .unwrap_or(self.world.start_position())
+            }
+        } else {
+            if let Some(target) = self.world.opponent_entities()
+                .min_by_key(|v| (v.center(world.get_entity_properties(&v.entity_type).size).distance(position), v.id)) {
+                target.position()
+            } else {
+                position
+            }
+        }
+    }
+
+    fn get_entity_target_by_entity_field(&self, entity: &Entity, busy: &Vec<(i32, Vec2i)>) -> Option<Vec2i> {
+        if let Some(entity_field) = self.entity_fields.get(&entity.id) {
+            let (mut max_score, mut optimal_position, mut min_score_ratio) = self.entity_targets.get(&entity.id)
+                .filter(|target| !busy.iter().any(|(_, v)| *v == **target))
+                .map(|target| (entity_field.get_position_score(*target), Some(*target), self.config.entity_min_score_ratio))
+                .unwrap_or((-std::f32::MAX, None, 0.0));
+            let properties = self.world.get_entity_properties(&entity.entity_type);
+            self.world.visit_map_range(entity.position(), properties.size, properties.sight_range, |position, tile, locked| {
+                if locked || Some(position) == optimal_position || busy.iter().any(|(_, v)| *v == position) {
+                    return;
+                }
+                if let Tile::Entity(entity_id) = tile {
+                    if entity_id != entity.id {
+                        return;
+                    }
+                }
+                let score = entity_field.get_position_score(position);
+                if max_score < score && (max_score.signum() != score.signum()
+                    || (max_score.signum() > 0.0 && score / max_score - 1.0 >= min_score_ratio)
+                    || (max_score.signum() < 0.0 && max_score / score - 1.0 >= min_score_ratio)) {
+                    max_score = score;
+                    optimal_position = Some(position);
+                    min_score_ratio = 0.0;
+                }
+            });
+            return optimal_position;
+        }
+        None
+    }
+
     #[cfg(feature = "enable_debug")]
     fn debug_update_entities(&self, debug: &mut debug::Debug) {
         for entity in self.world.my_entities() {
@@ -367,7 +504,7 @@ impl Bot {
                 Color { a: 1.0, r: 0.7, g: 0.5, b: 0.2 },
             );
             debug.add_world_text(
-                format!("Role: {:?}", self.roles.get(&entity.id)),
+                format!("Role: {:?}, target: {:?}", self.roles.get(&entity.id), self.entity_targets.get(&entity.id)),
                 position,
                 Vec2f::only_y(-32.0),
                 Color { a: 1.0, r: 0.7, g: 0.5, b: 0.2 },

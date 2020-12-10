@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use model::{
     AttackAction,
     AutoAttack,
@@ -40,13 +42,13 @@ pub enum Role {
 }
 
 impl Role {
-    pub fn get_action(&self, entity: &Entity, world: &World, groups: &Vec<Group>) -> EntityAction {
+    pub fn get_action(&self, entity: &Entity, world: &World, groups: &Vec<Group>, entity_targets: &HashMap<i32, Vec2i>) -> EntityAction {
         match self {
             Role::Harvester { position, resource_id } => harvest_resources(entity, world, *position, *resource_id),
             Role::UnitBuilder => build_unit(entity, world),
             Role::BuildingBuilder { position, entity_type } => build_building(entity, world, *position, entity_type),
             Role::BuildingRepairer { building_id: base_id } => repair_building(entity, world, *base_id),
-            Role::GroupMember { group_id } => assist_group(entity, world, groups.iter().find(|v| v.id() == *group_id).unwrap()),
+            Role::GroupMember { group_id } => assist_group(entity, world, groups.iter().find(|v| v.id() == *group_id).unwrap(), entity_targets),
             Role::GroupSupplier { .. } => build_unit(entity, world),
             Role::None => get_default_action(entity, world),
         }
@@ -151,7 +153,7 @@ fn repair_building(builder: &Entity, world: &World, base_id: i32) -> EntityActio
         .unwrap_or_else(get_idle_action)
 }
 
-fn assist_group(unit: &Entity, world: &World, group: &Group) -> EntityAction {
+fn assist_group(unit: &Entity, world: &World, group: &Group, entity_targets: &HashMap<i32, Vec2i>) -> EntityAction {
     let properties = world.get_entity_properties(&unit.entity_type);
     let unit_center = unit.center(properties.size);
     let repair_action = properties.repair.as_ref()
@@ -208,7 +210,7 @@ fn assist_group(unit: &Entity, world: &World, group: &Group) -> EntityAction {
         }),
         build_action: None,
         repair_action: None,
-        move_action: group.target()
+        move_action: entity_targets.get(&unit.id).cloned().or_else(|| group.target())
             .map(|position| MoveAction {
                 target: position.as_model(),
                 find_closest_position: true,
