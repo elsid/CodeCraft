@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use model::{AttackProperties, EntityProperties, EntityType};
+use model::{AttackProperties, Entity, EntityProperties, EntityType};
 #[cfg(feature = "enable_debug")]
 use model::Color;
 
@@ -229,6 +229,41 @@ impl Field {
             + ((fragment.opponent_sight_range_power > 0.0) as i32 * group.destroy_score()) as f32 * self.config.group_my_destroy_score_weight
             + ((fragment.opponent_sight_range_power > 0.0) as i32) as f32 * fragment.my_static_destroy_score * self.config.group_my_static_destroy_score_weight
             + fragment.opponent_destroy_score * self.config.group_opponent_destroy_score_weight
+    }
+
+    pub fn get_entity_score(&self, position: Vec2i, unit: &Entity, world: &World) -> f32 {
+        let properties = world.get_entity_properties(&unit.entity_type);
+        let power = if let Some(attack) = properties.attack.as_ref() {
+            (unit.health * attack.damage) as f32
+        } else {
+            0.0
+        };
+        let fragment = &self.fragments[position_to_index(position, self.size)];
+        let my_attack_range_power = if fragment.opponent_attack_range_power > 0.0 {
+            power
+                + fragment.my_entities_in_attack_range_scores.iter()
+                .filter(|(entity_id, score)| *entity_id != unit.id && *score > 0.0)
+                .map(|(_, score)| *score)
+                .sum::<f32>()
+        } else {
+            fragment.my_static_attack_range_power * self.config.group_my_static_attack_range_power_weight
+        };
+        let my_sight_range_power = if fragment.opponent_sight_range_power > 0.0 {
+            power
+                + fragment.my_entities_in_sight_range_scores.iter()
+                .filter(|(entity_id, score)| *entity_id != unit.id && *score > 0.0)
+                .map(|(_, score)| *score)
+                .sum::<f32>()
+        } else {
+            0.0
+        };
+        0.0
+            + unit.position().distance(position) as f32 * self.config.entity_distance_to_position_weight
+            + my_attack_range_power as f32 * self.config.entity_my_attack_range_power_weight
+            + fragment.opponent_attack_range_power * self.config.entity_opponent_attack_range_power_weight
+            + my_sight_range_power as f32 * self.config.entity_my_sight_range_power_weight
+            + fragment.opponent_sight_range_power * self.config.entity_opponent_sight_range_power_weight
+            + fragment.opponent_destroy_score * self.config.entity_opponent_destroy_score_weight
     }
 
     #[cfg(feature = "enable_debug")]

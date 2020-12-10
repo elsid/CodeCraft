@@ -43,5 +43,40 @@
     "type": "min_float",
     "min": 0.0,
     "index": 9
+  },
+  "entity_distance_to_position_weight": {
+    "type": "max_float",
+    "max": 0.0,
+    "index": 11
+  },
+  "entity_my_attack_range_power_weight": {
+    "type": "min_float",
+    "min": 0.0,
+    "index": 12
+  },
+  "entity_opponent_attack_range_power_weight": {
+    "type": "max_float",
+    "max": 0.0,
+    "index": 13
+  },
+  "entity_my_sight_range_power_weight": {
+    "type": "min_float",
+    "min": 0.0,
+    "index": 14
+  },
+  "entity_opponent_sight_range_power_weight": {
+    "type": "max_float",
+    "max": 0.0,
+    "index": 15
+  },
+  "entity_opponent_destroy_score_weight": {
+    "type": "min_float",
+    "min": 0.0,
+    "index": 16
+  },
+  "entity_my_static_attack_range_power_weight": {
+    "type": "min_float",
+    "min": 0.0,
+    "index": 17
   }
 }

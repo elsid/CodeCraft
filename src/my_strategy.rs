@@ -7,6 +7,8 @@ pub use config::*;
 #[allow(unused_imports)]
 pub use entity::*;
 #[allow(unused_imports)]
+pub use entity_field::*;
+#[allow(unused_imports)]
 pub use entity_type::*;
 #[allow(unused_imports)]
 pub use field::*;
@@ -36,6 +38,9 @@ pub use vec2::*;
 pub use world::*;
 
 use super::DebugInterface;
+
+#[path = "entity_field.rs"]
+pub mod entity_field;
 
 #[path = "group_field.rs"]
 pub mod group_field;

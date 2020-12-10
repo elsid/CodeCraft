@@ -12,7 +12,7 @@ use model::{Color, DebugState};
 
 #[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
-use crate::my_strategy::{Config, Field, Group, GroupField, GroupState, InfluenceField, is_protected_entity_type, Positionable, Role, Stats, Task, TaskManager, World};
+use crate::my_strategy::{Config, EntityField, Field, Group, GroupField, GroupState, InfluenceField, is_protected_entity_type, Positionable, Role, Stats, Task, TaskManager, World};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
@@ -33,6 +33,7 @@ pub struct Bot {
     field: Field,
     influence_field: InfluenceField,
     group_fields: Vec<GroupField>,
+    entity_fields: HashMap<i32, EntityField>,
 }
 
 impl Bot {
@@ -50,6 +51,7 @@ impl Bot {
             world,
             config,
             group_fields: Vec::new(),
+            entity_fields: HashMap::new(),
         }
     }
 
@@ -124,6 +126,16 @@ impl Bot {
         self.group_fields.retain(|group_field| groups.iter().any(|group| group.id() == group_field.group_id()));
         for i in 0..self.groups.len() {
             self.group_fields[i].update(&self.field, &self.groups);
+        }
+    }
+
+    fn update_entity_fields(&mut self) {
+        let world = &self.world;
+        self.entity_fields.retain(|k, _| world.contains_entity(*k));
+        for entity in self.world.my_entities() {
+            self.entity_fields.entry(entity.id)
+                .or_insert_with(|| EntityField::new(world.map_size()))
+                .update(entity, &self.field, world);
         }
     }
 
