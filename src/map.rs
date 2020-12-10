@@ -4,7 +4,7 @@ use std::iter::repeat;
 use model::Color;
 use model::PlayerView;
 
-use crate::my_strategy::{Positionable, Vec2i};
+use crate::my_strategy::{Positionable, Rect, Vec2i};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{debug, Vec2f};
 
@@ -52,18 +52,13 @@ impl Map {
             }
             if player_view.fog_of_war && entity.player_id == Some(player_view.my_id) {
                 let position = entity.position();
-                let entity_center = position + Vec2i::both(properties.size / 2);
-                let sight_range = properties.sight_range + properties.size / 2 + (properties.size % 2 == 0) as i32;
-                for y in (position.y() - properties.sight_range).max(0)..(position.y() + properties.size + properties.sight_range).min(self.size as i32) {
-                    for x in (position.x() - properties.sight_range).max(0)..(position.x() + properties.size + properties.sight_range).min(self.size as i32) {
-                        let tile_position = Vec2i::new(x, y);
-                        let index = self.get_tile_index(tile_position);
-                        if tile_position.distance(entity_center) <= sight_range
-                            && matches!(self.tiles[index], Tile::Unknown) {
-                            self.tiles[index] = Tile::Empty;
-                        }
+                let bounds = Rect::new(Vec2i::zero(), Vec2i::both(self.size as i32));
+                visit_range(position, properties.size, properties.sight_range, &bounds, |tile_position| {
+                    let index = self.get_tile_index(tile_position);
+                    if matches!(self.tiles[index], Tile::Unknown) {
+                        self.tiles[index] = Tile::Empty;
                     }
-                }
+                });
             }
         }
     }
@@ -269,4 +264,71 @@ pub fn find_on_rect_border<F: FnMut(Vec2i) -> bool>(min: Vec2i, max: Vec2i, mut 
         }
     }
     None
+}
+
+pub fn visit_range<F: FnMut(Vec2i)>(position: Vec2i, size: i32, range: i32, bounds: &Rect, mut f: F) {
+    let bottom = position.y() + size;
+    for y in (position.y() - range).max(bounds.min().y())..(bottom + range).min(bounds.max().y()) {
+        let shift = if y < position.y() {
+            range - (position.y() - y)
+        } else if y >= bottom {
+            range - (y - (bottom - 1))
+        } else {
+            range
+        };
+        for x in (position.x() - shift).max(bounds.min().x())..(position.x() + size + shift).min(bounds.max().x()) {
+            f(Vec2i::new(x, y))
+        }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::my_strategy::{Rect, Vec2i, visit_range};
+
+    #[test]
+    fn visit_range_1_1() {
+        let mut result = Vec::new();
+        visit_range(Vec2i::new(5, 5), 1, 1, &Rect::new(Vec2i::zero(), Vec2i::both(80)), |position| {
+            result.push(position);
+        });
+        assert_eq!(result, vec![
+            Vec2i::new(5, 4),
+            Vec2i::new(4, 5),
+            Vec2i::new(5, 5),
+            Vec2i::new(6, 5),
+            Vec2i::new(5, 6),
+        ]);
+    }
+
+    #[test]
+    fn visit_range_2_1() {
+        let mut result = Vec::new();
+        visit_range(Vec2i::new(5, 5), 2, 1, &Rect::new(Vec2i::zero(), Vec2i::both(80)), |position| {
+            result.push(position);
+        });
+        assert_eq!(result, vec![
+            Vec2i::new(5, 4), Vec2i::new(6, 4),
+            Vec2i::new(4, 5), Vec2i::new(5, 5), Vec2i::new(6, 5), Vec2i::new(7, 5),
+            Vec2i::new(4, 6), Vec2i::new(5, 6), Vec2i::new(6, 6), Vec2i::new(7, 6),
+            Vec2i::new(5, 7), Vec2i::new(6, 7),
+        ]);
+    }
+
+    #[test]
+    fn visit_range_2_2() {
+        let mut result = Vec::new();
+        visit_range(Vec2i::new(5, 5), 2, 2, &Rect::new(Vec2i::zero(), Vec2i::both(80)), |position| {
+            result.push(position);
+        });
+        assert_eq!(result, vec![
+            Vec2i::new(5, 3), Vec2i::new(6, 3),
+            Vec2i::new(4, 4), Vec2i::new(5, 4), Vec2i::new(6, 4), Vec2i::new(7, 4),
+            Vec2i::new(3, 5), Vec2i::new(4, 5), Vec2i::new(5, 5), Vec2i::new(6, 5), Vec2i::new(7, 5), Vec2i::new(8, 5),
+            Vec2i::new(3, 6), Vec2i::new(4, 6), Vec2i::new(5, 6), Vec2i::new(6, 6), Vec2i::new(7, 6), Vec2i::new(8, 6),
+            Vec2i::new(4, 7), Vec2i::new(5, 7), Vec2i::new(6, 7), Vec2i::new(7, 7),
+            Vec2i::new(5, 8), Vec2i::new(6, 8),
+        ]);
+    }
 }

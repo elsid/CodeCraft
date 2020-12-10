@@ -15,6 +15,8 @@ pub use moving_average::*;
 #[allow(unused_imports)]
 pub use positionable::*;
 #[allow(unused_imports)]
+pub use rect::*;
+#[allow(unused_imports)]
 pub use roles::*;
 #[allow(unused_imports)]
 pub use stats::*;
@@ -26,6 +28,9 @@ pub use vec2::*;
 pub use world::*;
 
 use super::DebugInterface;
+
+#[path = "rect.rs"]
+pub mod rect;
 
 #[cfg(feature = "enable_debug")]
 #[path = "debug.rs"]
