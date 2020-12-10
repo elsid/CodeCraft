@@ -23,6 +23,8 @@ pub use map::*;
 #[allow(unused_imports)]
 pub use moving_average::*;
 #[allow(unused_imports)]
+pub use path::*;
+#[allow(unused_imports)]
 pub use positionable::*;
 #[allow(unused_imports)]
 pub use rect::*;
@@ -38,6 +40,9 @@ pub use vec2::*;
 pub use world::*;
 
 use super::DebugInterface;
+
+#[path = "path.rs"]
+pub mod path;
 
 #[path = "entity_field.rs"]
 pub mod entity_field;

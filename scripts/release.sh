@@ -34,6 +34,7 @@ cp ${SRC}/src/influence_field.rs src/
 cp ${SRC}/src/map.rs src/
 cp ${SRC}/src/moving_average.rs src/
 cp ${SRC}/src/my_strategy.rs src/
+cp ${SRC}/src/path.rs src/
 cp ${SRC}/src/positionable.rs src/
 cp ${SRC}/src/rect.rs src/
 cp ${SRC}/src/roles.rs src/
