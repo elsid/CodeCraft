@@ -15,3 +15,4 @@ serde_json = "1.0"
 [features]
 enable_debug = []
 write_player_view = []
+max_tick = []

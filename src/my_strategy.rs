@@ -76,6 +76,8 @@ pub struct MyStrategy {
     bot: Option<Bot>,
     #[cfg(feature = "write_player_view")]
     player_view_file: std::fs::File,
+    #[cfg(feature = "max_tick")]
+    max_tick: i32,
 }
 
 impl MyStrategy {
@@ -84,6 +86,8 @@ impl MyStrategy {
             bot: None,
             #[cfg(feature = "write_player_view")]
             player_view_file: std::fs::File::create("player_view.json").unwrap(),
+            #[cfg(feature = "max_tick")]
+            max_tick: std::env::var("MAX_TICK").map(|v| v.parse::<i32>().unwrap_or(std::i32::MAX)).unwrap_or(std::i32::MAX),
         }
     }
 
@@ -92,6 +96,10 @@ impl MyStrategy {
         player_view: &model::PlayerView,
         _debug_interface: Option<&mut DebugInterface>,
     ) -> model::Action {
+        #[cfg(feature = "max_tick")]
+        if player_view.current_tick > self.max_tick {
+            std::process::exit(0);
+        }
         #[cfg(feature = "write_player_view")]
             self.write_player_view(player_view);
         if self.bot.is_none() {
