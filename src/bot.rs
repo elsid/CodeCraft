@@ -225,7 +225,7 @@ impl Bot {
             }
             let defend = group.units_count() < group.need_count() ||
                 self.world.get_my_entity_count_of(&EntityType::MeleeUnit) + self.world.get_my_entity_count_of(&EntityType::RangedUnit) < 15;
-            let position = group.get_center(&self.world);
+            let position = group.position();
             let world = &self.world;
             if defend {
                 if let Some(target) = self.world.opponent_entities()
@@ -324,7 +324,7 @@ impl Bot {
             if group.is_empty() {
                 continue;
             }
-            let center = group.get_center(&self.world);
+            let center = group.position();
             if let Some(target) = group.target() {
                 debug.add_world_line(
                     center.center(),
@@ -340,7 +340,7 @@ impl Bot {
             debug.add_world_text(
                 format!("Group {}", group.id()),
                 center.center(),
-                Vec2f::zero(),
+                Vec2f::only_y(32.0),
                 Color { a: 0.9, r: 1.0, g: 0.5, b: 0.25 },
             );
         }

@@ -18,6 +18,7 @@ pub struct Group {
     has: HashMap<EntityType, usize>,
     need: HashMap<EntityType, usize>,
     units: HashMap<i32, EntityType>,
+    position: Vec2i,
 }
 
 impl Group {
@@ -29,6 +30,7 @@ impl Group {
             has: need.keys().cloned().map(|v| (v, 0)).collect(),
             need,
             units: HashMap::new(),
+            position: Vec2i::zero(),
         }
     }
 
@@ -40,6 +42,10 @@ impl Group {
         &self.has
     }
 
+    pub fn position(&self) -> Vec2i {
+        self.position
+    }
+
     pub fn update(&mut self, world: &World) {
         let absent: Vec<i32> = self.units.keys().cloned().filter(|v| !world.contains_entity(*v)).collect();
         for unit_id in absent.iter() {
@@ -49,6 +55,17 @@ impl Group {
             if !world.has_active_base_for(entity_type) {
                 *count = self.has[&entity_type];
             }
+        }
+        if self.units.is_empty() {
+            self.position = Vec2i::zero();
+        } else {
+            let mean_position = self.units.keys()
+                .map(|v| world.get_entity(*v).position())
+                .fold(Vec2i::zero(), |r, v| r + v) / self.units.len() as i32;
+            self.position = self.units.keys()
+                .map(|v| (world.get_entity(*v).position(), *v))
+                .min_by_key(|(position, entity_id)| (position.distance(mean_position), *entity_id))
+                .unwrap().0;
         }
     }
 
@@ -96,12 +113,6 @@ impl Group {
 
     pub fn state(&self) -> GroupState {
         self.state
-    }
-
-    pub fn get_center(&self, world: &World) -> Vec2i {
-        self.units.keys()
-            .fold(Vec2i::zero(), |r, unit_id| r + world.get_entity(*unit_id).position())
-            / self.units.len() as i32
     }
 
     pub fn units(&self) -> impl Iterator<Item=&i32> {
