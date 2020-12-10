@@ -271,13 +271,13 @@ impl Bot {
                 format!("{} ({}, {})", entity.id, entity.position.x, entity.position.y),
                 position,
                 Vec2f::zero(),
-                Color { a: 1.0, r: 1.0, g: 0.5, b: 0.0 },
+                Color { a: 1.0, r: 0.7, g: 0.5, b: 0.2 },
             );
             debug.add_world_text(
                 format!("Role: {:?}", self.roles.get(&entity.id)),
                 position,
-                Vec2f::only_y(-28.0),
-                Color { a: 1.0, r: 1.0, g: 0.5, b: 0.0 },
+                Vec2f::only_y(-32.0),
+                Color { a: 1.0, r: 0.7, g: 0.5, b: 0.2 },
             );
             if let Some(role) = self.roles.get(&entity.id) {
                 match role {
@@ -311,8 +311,8 @@ impl Bot {
                 debug.add_world_text(
                     format!("Action: {}", text),
                     position,
-                    Vec2f::only_y(-2.0 * 28.0),
-                    Color { a: 1.0, r: 1.0, g: 0.5, b: 0.0 },
+                    Vec2f::only_y(-2.0 * 32.0),
+                    Color { a: 1.0, r: 0.7, g: 0.5, b: 0.2 },
                 );
             }
         }
@@ -341,15 +341,15 @@ impl Bot {
                 format!("Group {}", group.id()),
                 center.center(),
                 Vec2f::only_y(32.0),
-                Color { a: 0.9, r: 1.0, g: 0.5, b: 0.25 },
+                Color { a: 1.0, r: 0.7, g: 0.5, b: 0.2 },
             );
         }
-        debug.add_static_text(String::from("My groups:"));
+        debug.add_static_text(String::from("Groups:"));
         let mut group_ids: Vec<usize> = self.groups.keys().cloned().collect();
         group_ids.sort();
         for group_id in group_ids.iter() {
             let group = &self.groups[group_id];
-            debug.add_static_text(format!("{}: has={:?} target={:?}", group.id(), group.has(), group.target()));
+            debug.add_static_text(format!("{}) has={:?} target={:?} state={:?}", group.id(), group.has(), group.target(), group.state()));
         }
     }
 }
