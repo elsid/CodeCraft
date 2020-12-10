@@ -33,7 +33,7 @@ pub struct World {
     players: Vec<Player>,
     entities: Vec<Entity>,
     entities_by_id: HashMap<i32, usize>,
-    my_entities_count: HashMap<EntityType, usize>,
+    my_entities_count: Vec<usize>,
     map: RefCell<Map>,
     population_use: i32,
     population_provide: i32,
@@ -64,8 +64,8 @@ impl World {
             players: Vec::new(),
             entities: Vec::new(),
             entities_by_id: HashMap::new(),
-            my_entities_count: player_view.entity_properties.keys()
-                .map(|v| (v.clone(), 0))
+            my_entities_count: std::iter::repeat(0)
+                .take(player_view.entity_properties.len())
                 .collect(),
             map: RefCell::new(Map::new(player_view)),
             population_use: 0,
@@ -88,13 +88,13 @@ impl World {
         self.entities = player_view.entities.clone();
         self.entities.sort_by_key(|v| v.id);
         self.entities_by_id = self.entities.iter().enumerate().map(|(n, v)| (v.id, n)).collect();
-        for count in self.my_entities_count.values_mut() {
+        for count in self.my_entities_count.iter_mut() {
             *count = 0;
         }
         let entities_count = &mut self.my_entities_count;
         for entity in self.entities.iter() {
             if entity.player_id == Some(self.my_id) {
-                *entities_count.get_mut(&entity.entity_type).unwrap() += 1;
+                entities_count[entity.entity_type.clone() as usize] += 1;
             }
         }
         self.map.borrow_mut().update(player_view);
@@ -389,12 +389,12 @@ impl World {
     }
 
     pub fn get_my_entity_count_of(&self, entity_type: &EntityType) -> usize {
-        self.my_entities_count[entity_type]
+        self.my_entities_count[entity_type.clone() as usize]
     }
 
     pub fn get_my_units_count(&self) -> usize {
-        self.my_entities_count.iter()
-            .filter(|(k, _)| self.get_entity_properties(k).can_move)
+        self.my_entities_count.iter().enumerate()
+            .filter(|(k, _)| self.entity_properties[*k].can_move)
             .map(|(_, v)| *v)
             .sum()
     }
@@ -402,7 +402,7 @@ impl World {
     pub fn get_entity_cost(&self, entity_type: &EntityType) -> i32 {
         let properties = self.get_entity_properties(entity_type);
         properties.initial_cost + if properties.can_move {
-            self.my_entities_count[entity_type] as i32
+            self.get_my_entity_count_of(entity_type) as i32
         } else {
             0
         }
