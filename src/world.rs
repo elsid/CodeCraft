@@ -11,14 +11,7 @@ use model::{
 #[cfg(feature = "enable_debug")]
 use model::Color;
 
-use crate::my_strategy::{
-    is_entity_base,
-    is_entity_unit,
-    Map,
-    Positionable,
-    Tile,
-    Vec2i,
-};
+use crate::my_strategy::{is_entity_base, is_entity_unit, Map, Positionable, Rect, Tile, Vec2i};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{debug, Vec2f};
 
@@ -213,6 +206,10 @@ impl World {
 
     pub fn contains_entity(&self, entity_id: i32) -> bool {
         self.entities_by_id.contains_key(&entity_id)
+    }
+
+    pub fn entities(&self) -> &Vec<Entity> {
+        &self.entities
     }
 
     pub fn resources(&self) -> impl Iterator<Item=&Entity> {
@@ -541,6 +538,10 @@ impl World {
             }
         }
         false
+    }
+
+    pub fn bounds(&self) -> Rect {
+        Rect::new(Vec2i::zero(), Vec2i::both(self.map_size))
     }
 }
 

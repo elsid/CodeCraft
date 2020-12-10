@@ -58,6 +58,21 @@ impl Vec2f {
     pub fn left(&self) -> Self {
         Self { x: -self.x, y: self.y }
     }
+
+    #[inline(always)]
+    pub fn abs(&self) -> Self {
+        Vec2f::new(self.x.abs(), self.y.abs())
+    }
+
+    #[inline(always)]
+    pub fn sum(&self) -> f32 {
+        self.x + self.y
+    }
+
+    #[inline(always)]
+    pub fn manhattan_distance(&self, other: Self) -> f32 {
+        (other - *self).abs().sum()
+    }
 }
 
 impl From<Vec2i> for Vec2f {

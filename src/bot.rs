@@ -12,7 +12,7 @@ use model::{Color, DebugState};
 
 #[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
-use crate::my_strategy::{Config, Group, GroupState, is_protected_entity_type, Positionable, Role, Stats, Task, TaskManager, World};
+use crate::my_strategy::{Config, Field, Group, GroupState, is_protected_entity_type, Positionable, Role, Stats, Task, TaskManager, World};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
@@ -30,6 +30,7 @@ pub struct Bot {
     actions: HashMap<i32, EntityAction>,
     opening: bool,
     config: Config,
+    field: Field,
 }
 
 impl Bot {
@@ -40,9 +41,10 @@ impl Bot {
             roles: world.my_entities().map(|v| (v.id, Role::None)).collect(),
             stats: world.players().iter().map(|v| (v.id, Stats::new(v.id))).collect(),
             tasks: TaskManager::new(),
-            world,
             actions: HashMap::new(),
             opening: true,
+            field: Field::new(world.map_size(), config.clone()),
+            world,
             config,
         }
     }
@@ -190,7 +192,9 @@ impl Bot {
     fn create_group(&mut self, need: HashMap<EntityType, usize>) -> u32 {
         let group_id = self.next_group_id;
         self.next_group_id += 1;
-        self.groups.push(Group::new(group_id, need));
+        let mut group = Group::new(group_id, need);
+        group.update(&self.world);
+        self.groups.push(group);
         group_id
     }
 

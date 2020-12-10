@@ -282,6 +282,13 @@ pub fn visit_range<F: FnMut(Vec2i)>(position: Vec2i, size: i32, range: i32, boun
     }
 }
 
+pub fn visit_square<F: FnMut(Vec2i)>(position: Vec2i, size: i32, mut f: F) {
+    for y in position.y()..position.y() + size {
+        for x in position.x()..position.x() + size {
+            f(Vec2i::new(x, y))
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
