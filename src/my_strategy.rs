@@ -11,8 +11,6 @@ pub use groups::*;
 #[allow(unused_imports)]
 pub use map::*;
 #[allow(unused_imports)]
-pub use math::*;
-#[allow(unused_imports)]
 pub use moving_average::*;
 #[allow(unused_imports)]
 pub use positionable::*;
@@ -59,9 +57,6 @@ pub mod positionable;
 
 #[path = "entity.rs"]
 pub mod entity;
-
-#[path = "math.rs"]
-pub mod math;
 
 #[path = "vec2.rs"]
 pub mod vec2;

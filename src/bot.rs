@@ -146,11 +146,11 @@ impl Bot {
     fn try_play_opening(&mut self) -> bool {
         if self.world.current_tick() == 0 {
             let mut need = HashMap::new();
-            let melee_units = self.world.get_my_melee_units_count();
+            let melee_units = self.world.get_my_entity_count_of(&EntityType::MeleeUnit);
             if melee_units > 0 {
                 need.insert(EntityType::MeleeUnit, melee_units);
             }
-            let ranged_units = self.world.get_my_ranged_bases_count();
+            let ranged_units = self.world.get_my_entity_count_of(&EntityType::RangedUnit);
             if ranged_units > 0 {
                 need.insert(EntityType::RangedUnit, ranged_units);
             }
@@ -211,8 +211,8 @@ impl Bot {
 
     fn try_build_ranged_base(&mut self) {
         if self.tasks.stats().build_ranged_base == 0
-            && (self.world.get_my_ranged_bases_count() as i32) < self.world.my_resource() / self.world.get_entity_cost(&EntityType::RangedBase) / 3
-            && self.world.get_my_builder_units_count() > 0
+            && (self.world.get_my_entity_count_of(&EntityType::RangedBase) as i32) < self.world.my_resource() / self.world.get_entity_cost(&EntityType::RangedBase) / 3
+            && self.world.get_my_entity_count_of(&EntityType::BuilderUnit) > 0
             && self.world.my_resource() >= self.world.get_entity_cost(&EntityType::RangedBase) {
             self.tasks.push_front(Task::build_building(EntityType::RangedBase));
         }
@@ -220,8 +220,8 @@ impl Bot {
 
     fn try_build_builder_base(&mut self) {
         if self.tasks.stats().build_builder_base == 0
-            && self.world.get_my_builder_bases_count() == 0
-            && self.world.get_my_builder_units_count() > 0
+            && self.world.get_my_entity_count_of(&EntityType::BuilderBase) == 0
+            && self.world.get_my_entity_count_of(&EntityType::BuilderUnit) > 0
             && self.world.my_resource() >= self.world.get_entity_cost(&EntityType::BuilderBase) {
             self.tasks.push_front(Task::build_building(EntityType::BuilderBase));
         }

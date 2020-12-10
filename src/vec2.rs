@@ -2,8 +2,6 @@ use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign};
 
 use model::{Vec2F32, Vec2I32};
 
-use crate::my_strategy::Square;
-
 #[derive(Default, Clone, Copy, Debug, PartialOrd)]
 pub struct Vec2f {
     x: f32,
@@ -58,26 +56,6 @@ impl Vec2f {
     #[inline(always)]
     pub fn left(&self) -> Self {
         Self { x: -self.x, y: self.y }
-    }
-
-    #[inline(always)]
-    pub fn norm(&self) -> f32 {
-        (self.x.square() + self.y.square()).sqrt()
-    }
-
-    #[inline(always)]
-    pub fn distance(&self, other: Self) -> f32 {
-        (other - *self).norm()
-    }
-
-    #[inline(always)]
-    pub fn dot(&self, other: Self) -> f32 {
-        self.x * other.x + self.y * other.y
-    }
-
-    #[inline(always)]
-    pub fn signum(&self) -> Self {
-        Self { x: self.x.signum(), y: self.y.signum() }
     }
 }
 

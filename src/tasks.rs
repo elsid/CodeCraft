@@ -223,7 +223,7 @@ impl HarvestResourcesTask {
 }
 
 fn build_builders(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus {
-    let mut builders = world.get_my_builder_units_count();
+    let mut builders = world.get_my_entity_count_of(&EntityType::BuilderUnit);
     let units_count = world.get_my_units_count();
     let properties = world.get_entity_properties(&EntityType::BuilderUnit);
     let cost = world.get_entity_cost(&EntityType::BuilderUnit);

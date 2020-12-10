@@ -198,11 +198,6 @@ impl World {
             .filter(|v| is_entity_base(v))
     }
 
-    pub fn my_builder_bases(&self) -> impl Iterator<Item=&Entity> {
-        self.my_entities()
-            .filter(|v| matches!(v.entity_type, EntityType::BuilderBase))
-    }
-
     pub fn my_melee_bases(&self) -> impl Iterator<Item=&Entity> {
         self.my_entities()
             .filter(|v| matches!(v.entity_type, EntityType::MeleeBase))
@@ -223,25 +218,9 @@ impl World {
             .filter(|v| matches!(v.entity_type, EntityType::BuilderUnit))
     }
 
-    pub fn my_ranged_units(&self) -> impl Iterator<Item=&Entity> {
-        self.my_entities()
-            .filter(|v| matches!(v.entity_type, EntityType::RangedUnit))
-    }
-
-    pub fn my_melee_units(&self) -> impl Iterator<Item=&Entity> {
-        self.my_entities()
-            .filter(|v| matches!(v.entity_type, EntityType::MeleeUnit))
-    }
-
     pub fn is_empty_square(&self, position: Vec2i, size: i32) -> bool {
         self.map.borrow().find_inside_square(position, size, |_, tile, _| {
             !matches!(tile, Tile::Empty)
-        }).is_none()
-    }
-
-    pub fn is_free_square(&self, position: Vec2i, size: i32) -> bool {
-        self.map.borrow().find_inside_square(position, size, |_, tile, locked| {
-            locked || !matches!(tile, Tile::Empty)
         }).is_none()
     }
 
@@ -355,14 +334,6 @@ impl World {
         *self.allocated_population.borrow()
     }
 
-    pub fn try_allocate_population(&self, amount: i32) -> bool {
-        if self.my_population() < amount {
-            return false;
-        }
-        *self.allocated_population.borrow_mut() += amount;
-        true
-    }
-
     pub fn try_allocated_resource_and_population(&self, resource: i32, population: i32) -> bool {
         if self.my_resource() < resource || self.my_population() < population {
             return false;
@@ -421,44 +392,9 @@ impl World {
         self.my_entities_count[entity_type]
     }
 
-    pub fn get_my_builder_units_count(&self) -> usize {
-        self.my_entities_count[&EntityType::BuilderUnit]
-    }
-
-    pub fn get_my_melee_units_count(&self) -> usize {
-        self.my_entities_count[&EntityType::MeleeUnit]
-    }
-
-    pub fn get_my_ranged_units_count(&self) -> usize {
-        self.my_entities_count[&EntityType::RangedUnit]
-    }
-
-    pub fn get_my_builder_bases_count(&self) -> usize {
-        self.my_entities_count[&EntityType::BuilderBase]
-    }
-
-    pub fn get_my_melee_bases_count(&self) -> usize {
-        self.my_entities_count[&EntityType::MeleeBase]
-    }
-
-    pub fn get_my_ranged_bases_count(&self) -> usize {
-        self.my_entities_count[&EntityType::RangedBase]
-    }
-
-    pub fn get_my_turrets_count(&self) -> usize {
-        self.my_entities_count[&EntityType::Turret]
-    }
-
     pub fn get_my_units_count(&self) -> usize {
         self.my_entities_count.iter()
             .filter(|(k, _)| self.get_entity_properties(k).can_move)
-            .map(|(_, v)| *v)
-            .sum()
-    }
-
-    pub fn get_my_buildings_count(&self) -> usize {
-        self.my_entities_count.iter()
-            .filter(|(k, _)| !self.get_entity_properties(k).can_move)
             .map(|(_, v)| *v)
             .sum()
     }
