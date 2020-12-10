@@ -112,6 +112,26 @@ impl Map {
         position_to_index(position, self.size)
     }
 
+    pub fn visit_square<F: FnMut(Vec2i, Tile, bool)>(&self, position: Vec2i, size: i32, mut f: F) {
+        visit_square(position, size, |tile_position| {
+            f(tile_position, self.get_tile(tile_position), self.is_tile_locked(tile_position))
+        });
+    }
+
+    pub fn visit_range<F: FnMut(Vec2i, Tile, bool)>(&self, position: Vec2i, size: i32, range: i32, mut f: F) {
+        let bounds = Rect::new(Vec2i::zero(), Vec2i::both(self.size as i32));
+        visit_range(position, size, range, &bounds, |tile_position| {
+            f(tile_position, self.get_tile(tile_position), self.is_tile_locked(tile_position))
+        });
+    }
+
+    pub fn find_in_range<F: FnMut(Vec2i, Tile, bool) -> bool>(&self, position: Vec2i, size: i32, range: i32, mut f: F) -> Option<Vec2i> {
+        let bounds = Rect::new(Vec2i::zero(), Vec2i::both(self.size as i32));
+        find_in_range(position, size, range, &bounds, |tile_position| {
+            f(tile_position, self.get_tile(tile_position), self.is_tile_locked(tile_position))
+        })
+    }
+
     pub fn find_inside_square<F: FnMut(Vec2i, Tile, bool) -> bool>(&self, position: Vec2i, size: i32, mut f: F) -> Option<Vec2i> {
         find_inside_rect(
             position,
@@ -123,16 +143,6 @@ impl Map {
                     (Tile::Outside, false)
                 };
                 f(tile_position, tile, locked)
-            },
-        )
-    }
-
-    pub fn find_inside_square_within_map<F: FnMut(Vec2i, Tile, bool) -> bool>(&self, position: Vec2i, size: i32, mut f: F) -> Option<Vec2i> {
-        find_inside_rect(
-            position.highest(Vec2i::zero()),
-            (position + Vec2i::both(size)).lowest(Vec2i::both(self.size as i32)),
-            |tile_position| {
-                f(tile_position, self.get_tile(tile_position), self.is_tile_locked(tile_position))
             },
         )
     }
@@ -196,6 +206,13 @@ pub fn position_to_index(position: Vec2i, size: usize) -> usize {
 
 pub fn index_to_position(index: usize, size: usize) -> Vec2i {
     Vec2i::new((index % size as usize) as i32, (index / size as usize) as i32)
+}
+
+pub fn visit_neighbour<F: FnMut(Vec2i)>(position: Vec2i, size: i32, mut f: F) {
+    find_neighbour(position, size, |tile_position| {
+        f(tile_position);
+        false
+    });
 }
 
 pub fn find_neighbour<F: FnMut(Vec2i) -> bool>(position: Vec2i, size: i32, mut f: F) -> Option<Vec2i> {
@@ -282,6 +299,40 @@ pub fn visit_range<F: FnMut(Vec2i)>(position: Vec2i, size: i32, range: i32, boun
     }
 }
 
+pub fn find_in_range<F: FnMut(Vec2i) -> bool>(position: Vec2i, size: i32, range: i32, bounds: &Rect, mut f: F) -> Option<Vec2i> {
+    for y in (position.y() - range).max(bounds.min().y())..(position.y() + size + range).min(bounds.max().y()) {
+        let shift = if y < position.y() {
+            range - (position.y() - y)
+        } else if y >= position.y() + size {
+            range - (y - (position.y() + size - 1))
+        } else {
+            range
+        };
+        for x in (position.x() - shift).max(bounds.min().x())..(position.x() + size + shift).min(bounds.max().x()) {
+            let tile_position = Vec2i::new(x, y);
+            if f(tile_position) {
+                return Some(tile_position);
+            }
+        }
+    }
+    None
+}
+
+pub fn visit_square_with_bounds<F: FnMut(Vec2i)>(position: Vec2i, size: i32, bounds: &Rect, mut f: F) {
+    for y in position.y().max(bounds.min().y())..(position.y() + size).min(bounds.max().y()) {
+        for x in position.x().max(bounds.min().x())..(position.x() + size).min(bounds.max().x()) {
+            f(Vec2i::new(x, y))
+        }
+    }
+}
+
+pub fn visit_square<F: FnMut(Vec2i)>(position: Vec2i, size: i32, mut f: F) {
+    for y in position.y()..position.y() + size {
+        for x in position.x()..position.x() + size {
+            f(Vec2i::new(x, y))
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

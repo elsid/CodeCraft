@@ -1,0 +1,5 @@
+{
+  "entity_plan_min_depth": 1,
+  "entity_plan_max_depth": 4,
+  "entity_plan_max_iterations": 200
+}

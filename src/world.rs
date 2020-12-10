@@ -1,5 +1,7 @@
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+#[cfg(feature = "enable_debug")]
+use std::collections::HashSet;
 
 use model::{
     Entity,
@@ -11,14 +13,7 @@ use model::{
 #[cfg(feature = "enable_debug")]
 use model::Color;
 
-use crate::my_strategy::{
-    is_entity_base,
-    is_entity_unit,
-    Map,
-    Positionable,
-    Tile,
-    Vec2i,
-};
+use crate::my_strategy::{is_entity_base, is_entity_unit, Map, Positionable, Rect, Tile, Vec2i};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{debug, Vec2f};
 
@@ -43,6 +38,7 @@ pub struct World {
     allocated_resource: RefCell<i32>,
     allocated_population: RefCell<i32>,
     protected_radius: RefCell<Option<i32>>,
+    player_power: Vec<i32>,
     #[cfg(feature = "enable_debug")]
     player_score_time_series: Vec<Vec<i32>>,
     #[cfg(feature = "enable_debug")]
@@ -90,6 +86,7 @@ impl World {
             allocated_resource: RefCell::new(0),
             allocated_population: RefCell::new(0),
             protected_radius: RefCell::new(None),
+            player_power: std::iter::repeat(0).take(player_view.players.len()).collect(),
             #[cfg(feature = "enable_debug")]
             player_score_time_series: std::iter::repeat(Vec::new()).take(player_view.players.len()).collect(),
             #[cfg(feature = "enable_debug")]
@@ -128,6 +125,13 @@ impl World {
         *self.allocated_resource.borrow_mut() = 0;
         *self.allocated_population.borrow_mut() = 0;
         *self.protected_radius.borrow_mut() = None;
+        for i in 0..self.players.len() {
+            let player_id = self.players[i].id;
+            self.player_power[i] = self.entities.iter()
+                .filter(|v| v.player_id == Some(player_id))
+                .map(|v| v.health * self.get_entity_properties(&v.entity_type).attack.as_ref().map(|v| v.damage).unwrap_or(0))
+                .sum::<i32>();
+        }
         #[cfg(feature = "enable_debug")]
         for i in 0..self.players.len() {
             let player_id = self.players[i].id;
@@ -191,6 +195,10 @@ impl World {
         self.map.borrow().get_tile(position)
     }
 
+    pub fn is_tile_locked(&self, position: Vec2i) -> bool {
+        self.map.borrow().is_tile_locked(position)
+    }
+
     pub fn population_use(&self) -> i32 {
         self.population_use
     }
@@ -213,6 +221,14 @@ impl World {
 
     pub fn contains_entity(&self, entity_id: i32) -> bool {
         self.entities_by_id.contains_key(&entity_id)
+    }
+
+    pub fn entities(&self) -> &Vec<Entity> {
+        &self.entities
+    }
+
+    pub fn entity_properties(&self) -> &Vec<EntityProperties> {
+        &self.entity_properties
     }
 
     pub fn resources(&self) -> impl Iterator<Item=&Entity> {
@@ -413,6 +429,7 @@ impl World {
         use std::collections::{btree_map, BTreeMap};
 
         debug.add_static_text(format!("Tick {}", self.current_tick));
+        debug.add_static_text(format!("Players power: {:?}", self.player_power.iter().enumerate().map(|(i, v)| (self.players[i].id, *v)).collect::<BTreeMap<i32, i32>>()));
         let allocated = self.allocated_resource();
         let requested = self.requested_resource();
         debug.add_static_text(format!("Resource: {} - {} a - {} r = {}", self.my_player().resource, allocated, requested, self.my_resource()));
@@ -541,6 +558,22 @@ impl World {
             }
         }
         false
+    }
+
+    pub fn bounds(&self) -> Rect {
+        Rect::new(Vec2i::zero(), Vec2i::both(self.map_size))
+    }
+
+    pub fn visit_map_square<F: FnMut(Vec2i, Tile, bool)>(&self, position: Vec2i, size: i32, f: F) {
+        self.map.borrow().visit_square(position, size, f);
+    }
+
+    pub fn visit_map_range<F: FnMut(Vec2i, Tile, bool)>(&self, position: Vec2i, size: i32, range: i32, f: F) {
+        self.map.borrow().visit_range(position, size, range, f)
+    }
+
+    pub fn find_in_map_range<F: FnMut(Vec2i, Tile, bool) -> bool>(&self, position: Vec2i, size: i32, range: i32, f: F) -> Option<Vec2i> {
+        self.map.borrow().find_in_range(position, size, range, f)
     }
 }
 

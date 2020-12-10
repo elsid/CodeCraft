@@ -58,6 +58,21 @@ impl Vec2f {
     pub fn left(&self) -> Self {
         Self { x: -self.x, y: self.y }
     }
+
+    #[inline(always)]
+    pub fn abs(&self) -> Self {
+        Vec2f::new(self.x.abs(), self.y.abs())
+    }
+
+    #[inline(always)]
+    pub fn sum(&self) -> f32 {
+        self.x + self.y
+    }
+
+    #[inline(always)]
+    pub fn manhattan_distance(&self, other: Self) -> f32 {
+        (other - *self).abs().sum()
+    }
 }
 
 impl From<Vec2i> for Vec2f {
@@ -216,6 +231,16 @@ impl Vec2i {
     }
 
     #[inline(always)]
+    pub fn with_dx(&self, dx: i32) -> Self {
+        Self::new(self.x + dx, self.y)
+    }
+
+    #[inline(always)]
+    pub fn with_dy(&self, dy: i32) -> Self {
+        Self::new(self.x, self.y + dy)
+    }
+
+    #[inline(always)]
     pub const fn both(value: i32) -> Self {
         Self { x: value, y: value }
     }
@@ -251,6 +276,11 @@ impl Vec2i {
     }
 
     #[inline(always)]
+    pub fn product(&self) -> i32 {
+        self.x * self.y
+    }
+
+    #[inline(always)]
     pub fn distance(&self, other: Self) -> i32 {
         (other - *self).abs().sum()
     }
@@ -265,6 +295,15 @@ impl From<Vec2f> for Vec2i {
 impl From<Vec2I32> for Vec2i {
     fn from(value: Vec2I32) -> Self {
         Self::new(value.x, value.y)
+    }
+}
+
+impl Neg for Vec2i {
+    type Output = Self;
+
+    #[inline(always)]
+    fn neg(self) -> Self::Output {
+        Self::new(-self.x, -self.y)
     }
 }
 

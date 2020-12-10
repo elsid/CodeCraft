@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use model::{
     AttackAction,
     AutoAttack,
@@ -9,12 +11,7 @@ use model::{
     RepairAction,
 };
 
-use crate::my_strategy::{
-    Group,
-    Positionable,
-    Vec2i,
-    World,
-};
+use crate::my_strategy::{EntityPlanner, Group, Positionable, SimulatedEntityActionType, Vec2i, World};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Role {
@@ -40,13 +37,13 @@ pub enum Role {
 }
 
 impl Role {
-    pub fn get_action(&self, entity: &Entity, world: &World, groups: &Vec<Group>) -> EntityAction {
+    pub fn get_action(&self, entity: &Entity, world: &World, groups: &Vec<Group>, entity_targets: &HashMap<i32, Vec2i>, entity_planners: &HashMap<i32, EntityPlanner>) -> EntityAction {
         match self {
             Role::Harvester { position, resource_id } => harvest_resources(entity, world, *position, *resource_id),
             Role::UnitBuilder => build_unit(entity, world),
             Role::BuildingBuilder { position, entity_type } => build_building(entity, world, *position, entity_type),
             Role::BuildingRepairer { building_id: base_id } => repair_building(entity, world, *base_id),
-            Role::GroupMember { group_id } => assist_group(entity, world, groups.iter().find(|v| v.id() == *group_id).unwrap()),
+            Role::GroupMember { group_id } => assist_group(entity, world, groups.iter().find(|v| v.id() == *group_id).unwrap(), entity_targets, entity_planners),
             Role::GroupSupplier { .. } => build_unit(entity, world),
             Role::None => get_default_action(entity, world),
         }
@@ -151,7 +148,7 @@ fn repair_building(builder: &Entity, world: &World, base_id: i32) -> EntityActio
         .unwrap_or_else(get_idle_action)
 }
 
-fn assist_group(unit: &Entity, world: &World, group: &Group) -> EntityAction {
+fn assist_group(unit: &Entity, world: &World, group: &Group, entity_targets: &HashMap<i32, Vec2i>, entity_planners: &HashMap<i32, EntityPlanner>) -> EntityAction {
     let properties = world.get_entity_properties(&unit.entity_type);
     let unit_center = unit.center(properties.size);
     let repair_action = properties.repair.as_ref()
@@ -188,27 +185,20 @@ fn assist_group(unit: &Entity, world: &World, group: &Group) -> EntityAction {
             repair_action: Some(repair),
         };
     }
+    if let Some(action) = get_action_by_plan(unit, world, entity_planners) {
+        return action;
+    }
     EntityAction {
         attack_action: Some(AttackAction {
             target: None,
             auto_attack: Some(AutoAttack {
                 pathfind_range: properties.sight_range,
-                valid_targets: vec![
-                    EntityType::BuilderUnit,
-                    EntityType::MeleeUnit,
-                    EntityType::RangedUnit,
-                    EntityType::Turret,
-                    EntityType::House,
-                    EntityType::BuilderBase,
-                    EntityType::MeleeBase,
-                    EntityType::RangedBase,
-                    EntityType::Wall,
-                ],
+                valid_targets: vec![],
             }),
         }),
         build_action: None,
         repair_action: None,
-        move_action: group.target()
+        move_action: entity_targets.get(&unit.id).cloned().or_else(|| group.target())
             .map(|position| MoveAction {
                 target: position.as_model(),
                 find_closest_position: true,
@@ -253,4 +243,60 @@ fn get_idle_action() -> EntityAction {
         repair_action: None,
         move_action: None,
     }
+}
+
+fn get_action_by_plan(unit: &Entity, world: &World, entity_planners: &HashMap<i32, EntityPlanner>) -> Option<EntityAction> {
+    if let Some(planner) = entity_planners.get(&unit.id) {
+        let plan = planner.plan();
+        if !plan.transitions.is_empty() {
+            return Some(match plan.transitions[0] {
+                SimulatedEntityActionType::None => {
+                    EntityAction {
+                        attack_action: None,
+                        build_action: None,
+                        repair_action: None,
+                        move_action: None,
+                    }
+                }
+                SimulatedEntityActionType::Attack { target } => {
+                    EntityAction {
+                        attack_action: Some(AttackAction {
+                            target: Some(target),
+                            auto_attack: None,
+                        }),
+                        build_action: None,
+                        repair_action: None,
+                        move_action: None,
+                    }
+                }
+                SimulatedEntityActionType::MoveEntity { direction } => {
+                    EntityAction {
+                        attack_action: None,
+                        build_action: None,
+                        repair_action: None,
+                        move_action: Some(MoveAction {
+                            target: (unit.position() + direction).as_model(),
+                            find_closest_position: false,
+                            break_through: false,
+                        }),
+                    }
+                }
+                SimulatedEntityActionType::AutoAttack => {
+                    EntityAction {
+                        attack_action: Some(AttackAction {
+                            target: None,
+                            auto_attack: Some(AutoAttack {
+                                pathfind_range: world.get_entity_properties(&unit.entity_type).sight_range,
+                                valid_targets: vec![],
+                            }),
+                        }),
+                        build_action: None,
+                        repair_action: None,
+                        move_action: None,
+                    }
+                }
+            });
+        }
+    }
+    None
 }

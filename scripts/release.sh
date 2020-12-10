@@ -23,12 +23,16 @@ git rebase MailRuChamps/main patch
 cd clients/Rust/
 
 cp ${SRC}/src/bot.rs src/
+cp ${SRC}/src/config.rs src/
 cp ${SRC}/src/entity.rs src/
+cp ${SRC}/src/entity_planner.rs src/
+cp ${SRC}/src/entity_simulator.rs src/
 cp ${SRC}/src/entity_type.rs src/
 cp ${SRC}/src/groups.rs src/
 cp ${SRC}/src/map.rs src/
 cp ${SRC}/src/moving_average.rs src/
 cp ${SRC}/src/my_strategy.rs src/
+cp ${SRC}/src/path.rs src/
 cp ${SRC}/src/positionable.rs src/
 cp ${SRC}/src/rect.rs src/
 cp ${SRC}/src/roles.rs src/
