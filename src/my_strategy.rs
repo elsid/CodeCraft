@@ -3,6 +3,8 @@ use std::collections::HashMap;
 #[allow(unused_imports)]
 pub use bot::*;
 #[allow(unused_imports)]
+pub use config::*;
+#[allow(unused_imports)]
 pub use entity::*;
 #[allow(unused_imports)]
 pub use entity_type::*;
@@ -28,6 +30,9 @@ pub use vec2::*;
 pub use world::*;
 
 use super::DebugInterface;
+
+#[path = "config.rs"]
+pub mod config;
 
 #[path = "rect.rs"]
 pub mod rect;
@@ -103,7 +108,10 @@ impl MyStrategy {
         #[cfg(feature = "write_player_view")]
             self.write_player_view(player_view);
         if self.bot.is_none() {
-            self.bot = Some(Bot::new(World::new(&player_view)));
+            let config = get_config();
+            #[cfg(feature = "print_config")]
+            println!("{}", serde_json::to_string(&config).unwrap());
+            self.bot = Some(Bot::new(World::new(&player_view), config));
         }
         self.bot.as_mut()
             .map(|v| v.get_action(player_view))
@@ -135,4 +143,18 @@ impl MyStrategy {
         serde_json::to_writer(&mut self.player_view_file, &player_view).unwrap();
         self.player_view_file.write(b"\n").unwrap();
     }
+}
+
+#[cfg(not(feature = "read_config"))]
+fn get_config() -> Config {
+    Config::new()
+}
+
+#[cfg(feature = "read_config")]
+fn get_config() -> Config {
+    serde_json::from_str(
+        std::fs::read_to_string(
+            std::env::var("CONFIG").expect("CONFIG env is not found")
+        ).expect("Can't read config file").as_str()
+    ).expect("Can't parse config file")
 }

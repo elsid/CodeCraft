@@ -12,7 +12,7 @@ use model::{Color, DebugState};
 
 #[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
-use crate::my_strategy::{Group, GroupState, is_protected_entity_type, Positionable, Role, Stats, Task, TaskManager, World};
+use crate::my_strategy::{Config, Group, GroupState, is_protected_entity_type, Positionable, Role, Stats, Task, TaskManager, World};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
@@ -29,10 +29,11 @@ pub struct Bot {
     world: World,
     actions: HashMap<i32, EntityAction>,
     opening: bool,
+    config: Config,
 }
 
 impl Bot {
-    pub fn new(world: World) -> Self {
+    pub fn new(world: World, config: Config) -> Self {
         Self {
             next_group_id: 0,
             groups: Vec::new(),
@@ -42,6 +43,7 @@ impl Bot {
             world,
             actions: HashMap::new(),
             opening: true,
+            config,
         }
     }
 
