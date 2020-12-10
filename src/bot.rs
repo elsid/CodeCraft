@@ -12,7 +12,7 @@ use model::{Color, DebugState};
 
 #[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
-use crate::my_strategy::{Config, Field, Group, GroupState, InfluenceField, is_protected_entity_type, Positionable, Role, Stats, Task, TaskManager, World};
+use crate::my_strategy::{Config, Field, Group, GroupField, GroupState, InfluenceField, is_protected_entity_type, Positionable, Role, Stats, Task, TaskManager, World};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
@@ -32,6 +32,7 @@ pub struct Bot {
     config: Config,
     field: Field,
     influence_field: InfluenceField,
+    group_fields: Vec<GroupField>,
 }
 
 impl Bot {
@@ -48,6 +49,7 @@ impl Bot {
             influence_field: InfluenceField::new(world.map_size()),
             world,
             config,
+            group_fields: Vec::new(),
         }
     }
 
@@ -115,6 +117,14 @@ impl Bot {
             GroupState::New => true,
             _ => !group.is_empty(),
         });
+    }
+
+    fn update_group_fields(&mut self) {
+        let groups = &self.groups;
+        self.group_fields.retain(|group_field| groups.iter().any(|group| group.id() == group_field.group_id()));
+        for i in 0..self.groups.len() {
+            self.group_fields[i].update(&self.field, &self.groups);
+        }
     }
 
     fn update_tasks(&mut self) {
@@ -198,6 +208,7 @@ impl Bot {
         let mut group = Group::new(group_id, need);
         group.update(&self.world);
         self.groups.push(group);
+        self.group_fields.push(GroupField::new(group_id, self.world.map_size(), self.config.clone()));
         group_id
     }
 

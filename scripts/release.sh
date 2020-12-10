@@ -27,6 +27,7 @@ cp ${SRC}/src/config.rs src/
 cp ${SRC}/src/entity.rs src/
 cp ${SRC}/src/entity_type.rs src/
 cp ${SRC}/src/field.rs src/
+cp ${SRC}/src/group_field.rs src/
 cp ${SRC}/src/groups.rs src/
 cp ${SRC}/src/influence_field.rs src/
 cp ${SRC}/src/map.rs src/

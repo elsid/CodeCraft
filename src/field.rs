@@ -185,6 +185,52 @@ impl Field {
             + player_fragment.sight_score
     }
 
+    pub fn get_group_score(&self, position: Vec2i, group: &Group, groups: &Vec<Group>) -> f32 {
+        let group_index = groups.iter().find_position(|v| v.id() == group.id()).unwrap().0;
+        let fragment = &self.fragments[position_to_index(position, self.size)];
+        let my_attack_range_power = if fragment.opponent_attack_range_power > 0.0 {
+            group.power() as f32
+                + fragment.my_static_attack_range_power
+                + fragment.my_group_in_attack_range_scores.iter()
+                .filter(|(index, score)| *index != group_index && *score > 0.0)
+                .filter_map(|(index, score)| {
+                    let my_group = &groups[*index];
+                    if my_group.is_empty() || my_group.power() == 0 {
+                        return None;
+                    }
+                    Some(*score)
+                })
+                .sum::<f32>()
+        } else {
+            fragment.my_static_attack_range_power * self.config.group_my_static_attack_range_power_weight
+        };
+        let my_sight_range_power = if fragment.opponent_sight_range_power > 0.0 {
+            group.power() as f32
+                + fragment.my_static_sight_range_power
+                + fragment.my_group_in_sight_range_scores.iter()
+                .filter(|(index, score)| *index != group_index && *score > 0.0)
+                .filter_map(|(index, score)| {
+                    let my_group = &groups[*index];
+                    if my_group.is_empty() || my_group.power() == 0 {
+                        return None;
+                    }
+                    Some(*score)
+                })
+                .sum::<f32>()
+        } else {
+            0.0
+        };
+        0.0
+            + group.position().distance(position) as f32 * self.config.group_distance_to_position_weight
+            + my_attack_range_power * self.config.group_my_attack_range_power_weight
+            + fragment.opponent_attack_range_power * self.config.group_opponent_attack_range_power_weight
+            + my_sight_range_power * self.config.group_my_sight_range_power_weight
+            + fragment.opponent_sight_range_power * self.config.group_opponent_sight_range_power_weight
+            + ((fragment.opponent_sight_range_power > 0.0) as i32 * group.destroy_score()) as f32 * self.config.group_my_destroy_score_weight
+            + ((fragment.opponent_sight_range_power > 0.0) as i32) as f32 * fragment.my_static_destroy_score * self.config.group_my_static_destroy_score_weight
+            + fragment.opponent_destroy_score * self.config.group_opponent_destroy_score_weight
+    }
+
     #[cfg(feature = "enable_debug")]
     pub fn debug_update(&self, debug: &mut debug::Debug) {
         let mut min_score = std::f32::MAX;

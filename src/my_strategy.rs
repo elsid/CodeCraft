@@ -11,6 +11,8 @@ pub use entity_type::*;
 #[allow(unused_imports)]
 pub use field::*;
 #[allow(unused_imports)]
+pub use group_field::*;
+#[allow(unused_imports)]
 pub use groups::*;
 #[allow(unused_imports)]
 pub use influence_field::*;
@@ -34,6 +36,9 @@ pub use vec2::*;
 pub use world::*;
 
 use super::DebugInterface;
+
+#[path = "group_field.rs"]
+pub mod group_field;
 
 #[path = "influence_field.rs"]
 pub mod influence_field;

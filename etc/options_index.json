@@ -1,1 +1,47 @@
-{}
+{
+  "group_distance_to_position_weight": {
+    "type": "max_float",
+    "max": 0.0,
+    "index": 1
+  },
+  "group_my_attack_range_power_weight": {
+    "type": "min_float",
+    "min": 0.0,
+    "index": 2
+  },
+  "group_opponent_attack_range_power_weight": {
+    "type": "max_float",
+    "max": 0.0,
+    "index": 3
+  },
+  "group_my_sight_range_power_weight": {
+    "type": "min_float",
+    "min": 0.0,
+    "index": 4
+  },
+  "group_opponent_sight_range_power_weight": {
+    "type": "max_float",
+    "max": 0.0,
+    "index": 5
+  },
+  "group_my_destroy_score_weight": {
+    "type": "max_float",
+    "max": 0.0,
+    "index": 6
+  },
+  "group_my_static_destroy_score_weight": {
+    "type": "min_float",
+    "min": 0.0,
+    "index": 7
+  },
+  "group_opponent_destroy_score_weight": {
+    "type": "min_float",
+    "min": 0.0,
+    "index": 8
+  },
+  "group_my_static_attack_range_power_weight": {
+    "type": "min_float",
+    "min": 0.0,
+    "index": 9
+  }
+}
