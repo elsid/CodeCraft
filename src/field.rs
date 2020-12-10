@@ -171,6 +171,20 @@ impl Field {
         }
     }
 
+    pub fn get_player_index(&self, player_id: i32) -> usize {
+        self.players.iter().find_position(|v| **v == player_id).unwrap().0
+    }
+
+    pub fn get_player_influence_score(&self, position: Vec2i, player_index: usize) -> f32 {
+        let fragment = &self.fragments[position_to_index(position, self.size)];
+        let player_fragment = &fragment.player_fragments[player_index];
+        0.0
+            + player_fragment.destroy_score
+            + player_fragment.attack_range_power
+            + player_fragment.sight_range_power
+            + player_fragment.sight_score
+    }
+
     #[cfg(feature = "enable_debug")]
     pub fn debug_update(&self, debug: &mut debug::Debug) {
         let mut min_score = std::f32::MAX;

@@ -12,7 +12,7 @@ use model::{Color, DebugState};
 
 #[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
-use crate::my_strategy::{Config, Field, Group, GroupState, is_protected_entity_type, Positionable, Role, Stats, Task, TaskManager, World};
+use crate::my_strategy::{Config, Field, Group, GroupState, InfluenceField, is_protected_entity_type, Positionable, Role, Stats, Task, TaskManager, World};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
@@ -31,6 +31,7 @@ pub struct Bot {
     opening: bool,
     config: Config,
     field: Field,
+    influence_field: InfluenceField,
 }
 
 impl Bot {
@@ -44,6 +45,7 @@ impl Bot {
             actions: HashMap::new(),
             opening: true,
             field: Field::new(world.map_size(), config.clone()),
+            influence_field: InfluenceField::new(world.map_size()),
             world,
             config,
         }
@@ -65,6 +67,7 @@ impl Bot {
         }
         let mut debug = debug::Debug::new(state);
         self.world.debug_update(&mut debug);
+        self.influence_field.debug_update(&mut debug);
         debug.add_static_text(format!("Opening: {}", self.opening));
         self.debug_update_groups(&mut debug);
         self.debug_update_entities(&mut debug);

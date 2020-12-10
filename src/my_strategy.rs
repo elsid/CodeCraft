@@ -13,6 +13,8 @@ pub use field::*;
 #[allow(unused_imports)]
 pub use groups::*;
 #[allow(unused_imports)]
+pub use influence_field::*;
+#[allow(unused_imports)]
 pub use map::*;
 #[allow(unused_imports)]
 pub use moving_average::*;
@@ -32,6 +34,9 @@ pub use vec2::*;
 pub use world::*;
 
 use super::DebugInterface;
+
+#[path = "influence_field.rs"]
+pub mod influence_field;
 
 #[path = "field.rs"]
 pub mod field;
