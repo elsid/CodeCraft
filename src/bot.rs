@@ -13,7 +13,7 @@ use model::{Color, DebugState};
 
 #[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
-use crate::my_strategy::{Config, EntityField, Field, Group, GroupField, GroupState, InfluenceField, is_protected_entity_type, Path, Positionable, Rect, Role, Stats, Task, TaskManager, Tile, Vec2i, visit_range, World};
+use crate::my_strategy::{Config, EntityField, Field, Group, GroupField, GroupPlanner, GroupSimulator, GroupState, InfluenceField, is_protected_entity_type, Path, Positionable, Rect, Role, Stats, Task, TaskManager, Tile, Vec2i, visit_range, World};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
@@ -37,6 +37,8 @@ pub struct Bot {
     entity_fields: HashMap<i32, EntityField>,
     path: Path,
     entity_targets: HashMap<i32, Vec2i>,
+    group_simulator: Option<GroupSimulator>,
+    group_planners: Vec<GroupPlanner>,
 }
 
 impl Bot {
@@ -57,6 +59,8 @@ impl Bot {
             group_fields: Vec::new(),
             entity_fields: HashMap::new(),
             entity_targets: HashMap::new(),
+            group_simulator: None,
+            group_planners: Vec::new(),
         }
     }
 
@@ -80,19 +84,13 @@ impl Bot {
             features.push(String::from("use_group_field"));
         #[cfg(feature = "use_entity_field")]
             features.push(String::from("use_entity_field"));
+        #[cfg(feature = "use_group_planner")]
+            features.push(String::from("use_group_planner"));
         debug.add_static_text(format!("Features: {:?}", features));
         self.world.debug_update(&mut debug);
         self.influence_field.debug_update(&mut debug);
         self.path.debug_update(&mut debug);
         debug.add_static_text(format!("Opening: {}", self.opening));
-        for entity in self.world.my_entities() {
-            if matches!(entity.entity_type, EntityType::RangedUnit) {
-                if let Some(field) = self.entity_fields.get(&entity.id) {
-                    field.debug_update(entity, &mut debug);
-                    break;
-                }
-            }
-        }
         self.debug_update_groups(&mut debug);
         self.debug_update_entities(&mut debug);
         self.tasks.debug_update(&mut debug);
@@ -110,9 +108,18 @@ impl Bot {
             self.update_group_fields();
         #[cfg(feature = "use_entity_field")]
             self.update_entity_fields();
+        #[cfg(feature = "use_group_planner")]
+            {
+                self.update_group_simulator();
+                self.update_group_planners();
+            }
         self.update_tasks();
         self.update_group_targets();
         self.update_entity_targets();
+    }
+
+    fn update_group_simulator(&mut self) {
+        self.group_simulator = Some(GroupSimulator::new(&self.groups, self.config.segment_size, &self.world));
     }
 
     fn update_stats(&mut self) {
@@ -153,6 +160,18 @@ impl Bot {
         self.group_fields.retain(|group_field| groups.iter().any(|group| group.id() == group_field.group_id()));
         for i in 0..self.groups.len() {
             self.group_fields[i].update(&self.field, &self.groups);
+        }
+    }
+
+    fn update_group_planners(&mut self) {
+        let groups = &self.groups;
+        self.group_planners.retain(|group_planner| groups.iter().any(|group| group.id() == group_planner.group_id()));
+        for i in 0..self.groups.len() {
+            let group = &self.groups[i];
+            if group.is_empty() || group.power() == 0 {
+                continue;
+            }
+            self.group_planners[i].update(self.group_simulator.as_ref().unwrap().clone(), self.config.group_plan_max_iterations);
         }
     }
 
@@ -250,6 +269,7 @@ impl Bot {
         group.update(&self.world);
         self.groups.push(group);
         self.group_fields.push(GroupField::new(group_id, self.world.map_size(), self.config.clone()));
+        self.group_planners.push(GroupPlanner::new(group_id, self.config.group_plan_max_depth, self.config.segment_size));
         group_id
     }
 
@@ -294,6 +314,8 @@ impl Bot {
                     busy.push(Rect::new(v - Vec2i::both(radius), v + Vec2i::both(radius)));
                 });
                 target
+            } else if cfg!(feature = "use_group_planner") {
+                self.get_group_target_by_planner(&self.groups[i], &self.group_planners[i])
             } else {
                 Some(self.get_group_target_naive(&self.groups[i]))
             };
@@ -363,6 +385,11 @@ impl Bot {
             }
         });
         optimal_position
+    }
+
+    fn get_group_target_by_planner(&self, group: &Group, group_planner: &GroupPlanner) -> Option<Vec2i> {
+        group_planner.group_plan().transitions.first()
+            .map(|v| group.position() + *v * self.config.segment_size)
     }
 
     fn update_entity_targets(&mut self) {

@@ -15,6 +15,10 @@ pub use field::*;
 #[allow(unused_imports)]
 pub use group_field::*;
 #[allow(unused_imports)]
+pub use group_planner::*;
+#[allow(unused_imports)]
+pub use group_simulator::*;
+#[allow(unused_imports)]
 pub use groups::*;
 #[allow(unused_imports)]
 pub use influence_field::*;
@@ -40,6 +44,12 @@ pub use vec2::*;
 pub use world::*;
 
 use super::DebugInterface;
+
+#[path = "group_planner.rs"]
+pub mod group_planner;
+
+#[path = "group_simulator.rs"]
+pub mod group_simulator;
 
 #[path = "path.rs"]
 pub mod path;

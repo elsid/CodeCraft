@@ -26,6 +26,8 @@ pub struct Config {
     pub entity_opponent_sight_range_power_weight: f32,
     pub entity_opponent_destroy_score_weight: f32,
     pub entity_my_static_attack_range_power_weight: f32,
+    pub group_plan_max_depth: usize,
+    pub group_plan_max_iterations: usize,
 }
 
 impl Config {
@@ -50,6 +52,8 @@ impl Config {
             entity_opponent_sight_range_power_weight: -0.1,
             entity_opponent_destroy_score_weight: 5.0,
             entity_my_static_attack_range_power_weight: 0.1,
+            group_plan_max_depth: 8,
+            group_plan_max_iterations: 1000,
         }
     }
 }
