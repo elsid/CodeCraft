@@ -180,10 +180,9 @@ impl Bot {
         if self.tasks.stats().gather_group == 0 {
             let mut need = HashMap::new();
             if self.world.my_ranged_bases().any(|v| v.active) {
-                need.insert(EntityType::RangedUnit, 3);
-            }
-            if self.world.my_melee_bases().any(|v| v.active) {
-                need.insert(EntityType::MeleeUnit, 2);
+                need.insert(EntityType::RangedUnit, 5);
+            } else if self.world.my_melee_bases().any(|v| v.active) {
+                need.insert(EntityType::MeleeUnit, 5);
             }
             if !need.is_empty() {
                 self.gather_group(need);
