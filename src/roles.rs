@@ -190,45 +190,24 @@ fn assist_group(unit: &Entity, world: &World, group: &Group) -> EntityAction {
             repair_action: Some(repair),
         };
     }
-    let attack_action = properties.attack.as_ref()
-        .and_then(|_| {
-            world.opponent_entities()
-                .find(|v| {
-                    v.center(world.get_entity_properties(&v.entity_type).size).distance(unit_center)
-                        <= properties.sight_range
-                })
-                .map(|_| AttackAction {
-                    target: None,
-                    auto_attack: Some(AutoAttack {
-                        pathfind_range: properties.sight_range,
-                        valid_targets: vec![
-                            EntityType::BuilderUnit,
-                            EntityType::MeleeUnit,
-                            EntityType::RangedUnit,
-                            EntityType::Turret,
-                            EntityType::House,
-                            EntityType::BuilderBase,
-                            EntityType::MeleeBase,
-                            EntityType::RangedBase,
-                            EntityType::Wall,
-                        ],
-                    }),
-                })
-        });
-    if let Some(attack) = attack_action {
-        return EntityAction {
-            build_action: None,
-            repair_action: None,
-            move_action: attack.target.map(|v| MoveAction {
-                target: world.get_entity(v).position.clone(),
-                find_closest_position: true,
-                break_through: true,
-            }),
-            attack_action: Some(attack),
-        };
-    }
     EntityAction {
-        attack_action: None,
+        attack_action: Some(AttackAction {
+            target: None,
+            auto_attack: Some(AutoAttack {
+                pathfind_range: properties.sight_range,
+                valid_targets: vec![
+                    EntityType::BuilderUnit,
+                    EntityType::MeleeUnit,
+                    EntityType::RangedUnit,
+                    EntityType::Turret,
+                    EntityType::House,
+                    EntityType::BuilderBase,
+                    EntityType::MeleeBase,
+                    EntityType::RangedBase,
+                    EntityType::Wall,
+                ],
+            }),
+        }),
         build_action: None,
         repair_action: None,
         move_action: group.target()
