@@ -239,6 +239,7 @@ def get_stats(games):
     positions_dynamic = defaultdict(list)
     wins_dynamic = defaultdict(list)
     losses_dynamic = defaultdict(list)
+    place_score = Counter()
     for number, game in enumerate(games):
         fails += game['code'] != 0
         durations.append(game['duration'])
@@ -264,6 +265,7 @@ def get_stats(games):
                     places[place + 1][k] += 1
                     places_dynamic[k].append(place + 1)
                     places_positions[place + 1][v['position']][k] += 1
+                    place_score[k] += place + 1
         for k, v in game['results'].items():
             players.add(k)
             if v['crashed']:
@@ -314,6 +316,7 @@ def get_stats(games):
         losses_dynamic_cumsum=cumsums(losses_dynamic),
         positions_dynamic=positions_dynamic,
         seeds=numpy.array(sorted(seeds)),
+        place_score=place_score,
     )
 
 
