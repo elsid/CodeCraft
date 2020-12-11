@@ -43,6 +43,12 @@ pub struct World {
     allocated_resource: RefCell<i32>,
     allocated_population: RefCell<i32>,
     protected_radius: RefCell<Option<i32>>,
+    #[cfg(feature = "enable_debug")]
+    player_score_time_series: Vec<Vec<i32>>,
+    #[cfg(feature = "enable_debug")]
+    player_power_time_series: Vec<Vec<i32>>,
+    #[cfg(feature = "enable_debug")]
+    player_destroy_score_time_series: Vec<Vec<i32>>,
 }
 
 impl World {
@@ -78,6 +84,12 @@ impl World {
             allocated_resource: RefCell::new(0),
             allocated_population: RefCell::new(0),
             protected_radius: RefCell::new(None),
+            #[cfg(feature = "enable_debug")]
+            player_score_time_series: std::iter::repeat(Vec::new()).take(player_view.players.len()).collect(),
+            #[cfg(feature = "enable_debug")]
+            player_power_time_series: std::iter::repeat(Vec::new()).take(player_view.players.len()).collect(),
+            #[cfg(feature = "enable_debug")]
+            player_destroy_score_time_series: std::iter::repeat(Vec::new()).take(player_view.players.len()).collect(),
         }
     }
 
@@ -104,6 +116,22 @@ impl World {
         *self.allocated_resource.borrow_mut() = 0;
         *self.allocated_population.borrow_mut() = 0;
         *self.protected_radius.borrow_mut() = None;
+        #[cfg(feature = "enable_debug")]
+        for i in 0..self.players.len() {
+            let player_id = self.players[i].id;
+            let score = self.players[i].score;
+            self.player_score_time_series[i].push(score);
+            let power = self.entities.iter()
+                .filter(|entity| entity.player_id == Some(player_id))
+                .map(|entity| self.get_entity_properties(&entity.entity_type).attack.as_ref().map(|v| v.damage * entity.health).unwrap_or(0))
+                .sum();
+            self.player_power_time_series[i].push(power);
+            let destroy_score = self.entities.iter()
+                .filter(|entity| entity.player_id == Some(player_id))
+                .map(|entity| self.get_entity_properties(&entity.entity_type).destroy_score)
+                .sum();
+            self.player_destroy_score_time_series[i].push(destroy_score);
+        }
     }
 
     pub fn my_id(&self) -> i32 {
@@ -385,6 +413,25 @@ impl World {
             self.start_position.center() - Vec2f::both(0.5).left(),
             self.start_position.center() + Vec2f::both(0.5).left(),
             Color { a: 1.0, r: 0.0, g: 0.0, b: 1.0 },
+        );
+
+        debug.add_time_series_i32(
+            0,
+            String::from("Players score"),
+            self.player_score_time_series.iter().enumerate()
+                .map(|(i, v)| (v, debug::get_player_color(1.0, self.players[i].id))),
+        );
+        debug.add_time_series_i32(
+            1,
+            String::from("Players power"),
+            self.player_power_time_series.iter().enumerate()
+                .map(|(i, v)| (v, debug::get_player_color(1.0, self.players[i].id))),
+        );
+        debug.add_time_series_i32(
+            2,
+            String::from("Players destroy score"),
+            self.player_destroy_score_time_series.iter().enumerate()
+                .map(|(i, v)| (v, debug::get_player_color(1.0, self.players[i].id))),
         );
     }
 
