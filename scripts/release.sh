@@ -26,6 +26,8 @@ cp ${SRC}/src/bot.rs src/
 cp ${SRC}/src/config.rs src/
 cp ${SRC}/src/entity.rs src/
 cp ${SRC}/src/entity_field.rs src/
+cp ${SRC}/src/entity_planner.rs src/
+cp ${SRC}/src/entity_simulator.rs src/
 cp ${SRC}/src/entity_type.rs src/
 cp ${SRC}/src/field.rs src/
 cp ${SRC}/src/group_field.rs src/

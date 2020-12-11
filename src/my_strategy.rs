@@ -9,6 +9,10 @@ pub use entity::*;
 #[allow(unused_imports)]
 pub use entity_field::*;
 #[allow(unused_imports)]
+pub use entity_planner::*;
+#[allow(unused_imports)]
+pub use entity_simulator::*;
+#[allow(unused_imports)]
 pub use entity_type::*;
 #[allow(unused_imports)]
 pub use field::*;
@@ -44,6 +48,16 @@ pub use vec2::*;
 pub use world::*;
 
 use super::DebugInterface;
+
+#[cfg(test)]
+#[path = "examples.rs"]
+pub mod examples;
+
+#[path = "entity_planner.rs"]
+pub mod entity_planner;
+
+#[path = "entity_simulator.rs"]
+pub mod entity_simulator;
 
 #[path = "group_planner.rs"]
 pub mod group_planner;

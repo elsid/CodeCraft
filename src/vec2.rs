@@ -276,6 +276,11 @@ impl Vec2i {
     }
 
     #[inline(always)]
+    pub fn product(&self) -> i32 {
+        self.x * self.y
+    }
+
+    #[inline(always)]
     pub fn distance(&self, other: Self) -> i32 {
         (other - *self).abs().sum()
     }

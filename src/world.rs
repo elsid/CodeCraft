@@ -226,6 +226,10 @@ impl World {
         &self.entities
     }
 
+    pub fn entity_properties(&self) -> &Vec<EntityProperties> {
+        &self.entity_properties
+    }
+
     pub fn resources(&self) -> impl Iterator<Item=&Entity> {
         self.entities.iter()
             .filter(|v| v.entity_type == EntityType::Resource)

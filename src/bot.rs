@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::hash_map;
 use std::collections::HashMap;
 
@@ -10,10 +11,12 @@ use model::{
 };
 #[cfg(feature = "enable_debug")]
 use model::{Color, DebugState};
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 
 #[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
-use crate::my_strategy::{Config, EntityField, Field, Group, GroupField, GroupPlanner, GroupSimulator, GroupState, InfluenceField, is_protected_entity_type, Path, Positionable, Rect, Role, Stats, Task, TaskManager, Tile, Vec2i, visit_range, World};
+use crate::my_strategy::{Config, EntityField, EntityPlanner, EntitySimulator, Field, Group, GroupField, GroupPlanner, GroupSimulator, GroupState, InfluenceField, is_protected_entity_type, Path, Positionable, Rect, Role, Stats, Task, TaskManager, Tile, Vec2i, visit_range, World};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
@@ -39,10 +42,15 @@ pub struct Bot {
     entity_targets: HashMap<i32, Vec2i>,
     group_simulator: Option<GroupSimulator>,
     group_planners: Vec<GroupPlanner>,
+    entity_planners: HashMap<i32, EntityPlanner>,
+    rng: RefCell<StdRng>,
 }
 
 impl Bot {
     pub fn new(world: World, config: Config) -> Self {
+        let seed = world.entities().iter()
+            .map(|v| v.position.x as u64 + v.position.y as u64)
+            .sum();
         Self {
             next_group_id: 0,
             groups: Vec::new(),
@@ -61,6 +69,8 @@ impl Bot {
             entity_targets: HashMap::new(),
             group_simulator: None,
             group_planners: Vec::new(),
+            entity_planners: HashMap::new(),
+            rng: RefCell::new(StdRng::seed_from_u64(seed)),
         }
     }
 
@@ -86,6 +96,8 @@ impl Bot {
             features.push(String::from("use_entity_field"));
         #[cfg(feature = "use_group_planner")]
             features.push(String::from("use_group_planner"));
+        #[cfg(feature = "use_entity_planner")]
+            features.push(String::from("use_entity_planner"));
         debug.add_static_text(format!("Features: {:?}", features));
         self.world.debug_update(&mut debug);
         self.influence_field.debug_update(&mut debug);
@@ -93,6 +105,9 @@ impl Bot {
         debug.add_static_text(format!("Opening: {}", self.opening));
         self.debug_update_groups(&mut debug);
         self.debug_update_entities(&mut debug);
+        for entity_planner in self.entity_planners.values() {
+            entity_planner.debug_update(self.world.entity_properties(), &mut debug);
+        }
         self.tasks.debug_update(&mut debug);
         debug.send(debug_interface);
     }
@@ -116,6 +131,8 @@ impl Bot {
         self.update_tasks();
         self.update_group_targets();
         self.update_entity_targets();
+        #[cfg(feature = "use_entity_planner")]
+            self.update_entity_plans();
     }
 
     fn update_group_simulator(&mut self) {
@@ -202,7 +219,7 @@ impl Bot {
         self.world.my_entities()
             .filter_map(|entity| {
                 self.roles.get(&entity.id)
-                    .map(|role| (entity.id, role.get_action(entity, &self.world, &self.groups, &self.entity_targets)))
+                    .map(|role| (entity.id, role.get_action(entity, &self.world, &self.groups, &self.entity_targets, &self.entity_planners)))
             })
             .filter(|(entity_id, action)| {
                 self.actions.get(&entity_id).map(|v| *v != *action).unwrap_or(true)
@@ -517,6 +534,83 @@ impl Bot {
             return optimal_position;
         }
         None
+    }
+
+    fn update_entity_plans(&mut self) {
+        let world = &self.world;
+        self.entity_planners.retain(|entity_id, _| world.contains_entity(*entity_id));
+        for planner in self.entity_planners.values_mut() {
+            planner.reset();
+        }
+        let mut plans = Vec::new();
+        let mut simulators = Vec::new();
+        let mut rng = self.rng.borrow_mut();
+        for entity in self.world.my_units() {
+            if !matches!(self.roles[&entity.id], Role::GroupMember { .. }) {
+                continue;
+            }
+            let properties = self.world.get_entity_properties(&entity.entity_type);
+            let in_battle = properties.attack.as_ref()
+                .map(|attack| {
+                    self.world.opponent_entities()
+                        .any(|opponent| {
+                            let opponent_properties = self.world.get_entity_properties(&opponent.entity_type);
+                            if let Some(opponent_attack) = opponent_properties.attack.as_ref() {
+                                let bounds = Rect::new(opponent.position(), opponent.position() + Vec2i::both(opponent_properties.size));
+                                let distance = bounds.distance_to_position(entity.position());
+                                distance <= opponent_attack.attack_range.max(attack.attack_range) + 1
+                            } else {
+                                false
+                            }
+                        })
+                })
+                .unwrap_or(false);
+            if !in_battle {
+                continue;
+            }
+            let config = &self.config;
+            let planner = self.entity_planners.entry(entity.id)
+                .or_insert_with(|| {
+                    EntityPlanner::new(
+                        entity.player_id.unwrap(),
+                        entity.id,
+                        config.entity_plan_min_depth,
+                        config.entity_plan_max_depth,
+                    )
+                });
+            let map_size = 2 * properties.sight_range;
+            let shift = (entity.position() - Vec2i::both(map_size / 2))
+                .lowest(Vec2i::both(self.world.map_size() - map_size))
+                .highest(Vec2i::zero());
+            let simulator = EntitySimulator::new(shift, map_size as usize, &self.world);
+            planner.update(
+                self.world.map_size(),
+                simulator.clone(),
+                self.world.entity_properties(),
+                self.config.entity_plan_max_iterations,
+                &Vec::new(),
+                &mut *rng,
+            );
+            if !planner.plan().transitions.is_empty() {
+                simulators.push(simulator);
+                plans.push((entity.id, planner.plan().clone()));
+            }
+        }
+        plans.sort_by_key(|(entity_id, plan)| (-plan.score, *entity_id));
+        for i in 0..plans.len() {
+            let planner = self.entity_planners.get_mut(&plans[i].0).unwrap();
+            planner.update(
+                self.world.map_size(),
+                simulators[i].clone(),
+                self.world.entity_properties(),
+                self.config.entity_plan_max_iterations,
+                &plans[0..i],
+                &mut *rng,
+            );
+            if !planner.plan().transitions.is_empty() {
+                plans[i].1 = planner.plan().clone();
+            }
+        }
     }
 
     #[cfg(feature = "enable_debug")]

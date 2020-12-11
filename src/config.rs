@@ -28,6 +28,9 @@ pub struct Config {
     pub entity_my_static_attack_range_power_weight: f32,
     pub group_plan_max_depth: usize,
     pub group_plan_max_iterations: usize,
+    pub entity_plan_min_depth: usize,
+    pub entity_plan_max_depth: usize,
+    pub entity_plan_max_iterations: usize,
 }
 
 impl Config {
@@ -54,6 +57,9 @@ impl Config {
             entity_my_static_attack_range_power_weight: 0.1,
             group_plan_max_depth: 8,
             group_plan_max_iterations: 1000,
+            entity_plan_min_depth: 1,
+            entity_plan_max_depth: 4,
+            entity_plan_max_iterations: 200,
         }
     }
 }

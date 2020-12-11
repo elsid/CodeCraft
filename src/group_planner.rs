@@ -138,6 +138,9 @@ impl GroupPlanner {
         //         );
         //     }
         // }
+        if self.states.is_empty() {
+            return;
+        }
         if let Some(max_destroy_score) = self.visited.iter().map(|v| v.destroy_score).max_by_key(|v| (*v * 1000.0) as i32) {
             for group_state in self.visited.iter() {
                 debug.add_world_square(Vec2f::from(group_state.position * self.segment_size), self.segment_size as f32, color_from_heat(0.25, group_state.destroy_score / max_destroy_score))

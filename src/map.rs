@@ -224,6 +224,13 @@ pub fn index_to_position(index: usize, size: usize) -> Vec2i {
     Vec2i::new((index % size as usize) as i32, (index / size as usize) as i32)
 }
 
+pub fn visit_neighbour<F: FnMut(Vec2i)>(position: Vec2i, size: i32, mut f: F) {
+    find_neighbour(position, size, |tile_position| {
+        f(tile_position);
+        false
+    });
+}
+
 pub fn find_neighbour<F: FnMut(Vec2i) -> bool>(position: Vec2i, size: i32, mut f: F) -> Option<Vec2i> {
     for y in position.y()..position.y() + size {
         let tile_position = Vec2i::new(position.x() - 1, y);
