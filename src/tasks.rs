@@ -30,8 +30,7 @@ impl TaskManager {
         &self.stats
     }
 
-    pub fn update(&mut self, world: &World, roles: &mut HashMap<i32, Role>,
-                  groups: &mut HashMap<usize, Group>) {
+    pub fn update(&mut self, world: &World, roles: &mut HashMap<i32, Role>, groups: &mut Vec<Group>) {
         let mut done = HashSet::new();
         for task_id in self.order.iter() {
             let status = self.tasks.get_mut(&task_id).as_mut().unwrap().update(world, roles, groups);
@@ -128,7 +127,7 @@ impl Task {
         Self::BuildBuilding(BuildBuildingTask::new(entity_type))
     }
 
-    pub fn gather_group(group_id: usize) -> Self {
+    pub fn gather_group(group_id: u32) -> Self {
         Self::GatherGroup(GatherGroupTask::new(group_id))
     }
 
@@ -136,7 +135,7 @@ impl Task {
         Self::BuildUnits(BuildUnitsTask::new(entity_type, count))
     }
 
-    pub fn update(&mut self, world: &World, roles: &mut HashMap<i32, Role>, groups: &mut HashMap<usize, Group>) -> TaskStatus {
+    pub fn update(&mut self, world: &World, roles: &mut HashMap<i32, Role>, groups: &mut Vec<Group>) -> TaskStatus {
         match self {
             Self::HarvestResources(task) => task.update(world, roles),
             Self::BuildBuilders => build_builders(world, roles),
@@ -481,16 +480,16 @@ fn get_builders_count_for(world: &World, entity_type: &EntityType, roles: &HashM
 
 #[derive(Debug)]
 pub struct GatherGroupTask {
-    group_id: usize,
+    group_id: u32,
 }
 
 impl GatherGroupTask {
-    pub fn new(group_id: usize) -> Self {
+    pub fn new(group_id: u32) -> Self {
         Self { group_id }
     }
 
-    pub fn update(&mut self, world: &World, roles: &mut HashMap<i32, Role>, groups: &mut HashMap<usize, Group>) -> TaskStatus {
-        if let Some(group) = groups.get_mut(&self.group_id) {
+    pub fn update(&mut self, world: &World, roles: &mut HashMap<i32, Role>, groups: &mut Vec<Group>) -> TaskStatus {
+        if let Some(group) = groups.iter_mut().find(|v| v.id() == self.group_id) {
             if group.is_full() {
                 group.set_state(GroupState::Ready);
                 return TaskStatus::Done;

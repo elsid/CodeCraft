@@ -23,8 +23,8 @@ use crate::my_strategy::{
 pub struct Bot {
     stats: Vec<(i32, Stats)>,
     roles: HashMap<i32, Role>,
-    next_group_id: usize,
-    groups: HashMap<usize, Group>,
+    next_group_id: u32,
+    groups: Vec<Group>,
     tasks: TaskManager,
     world: World,
     actions: HashMap<i32, EntityAction>,
@@ -35,7 +35,7 @@ impl Bot {
     pub fn new(world: World) -> Self {
         Self {
             next_group_id: 0,
-            groups: HashMap::new(),
+            groups: Vec::new(),
             roles: world.my_entities().map(|v| (v.id, Role::None)).collect(),
             stats: world.players().iter().map(|v| (v.id, Stats::new(v.id))).collect(),
             tasks: TaskManager::new(),
@@ -101,10 +101,10 @@ impl Bot {
 
     fn update_groups(&mut self) {
         let world = &self.world;
-        for group in self.groups.values_mut() {
+        for group in self.groups.iter_mut() {
             group.update(world);
         }
-        self.groups.retain(|_, group| match group.state() {
+        self.groups.retain(|group| match group.state() {
             GroupState::New => true,
             _ => !group.is_empty(),
         });
@@ -185,10 +185,10 @@ impl Bot {
         self.tasks.push_front(Task::gather_group(group_id));
     }
 
-    fn create_group(&mut self, need: HashMap<EntityType, usize>) -> usize {
+    fn create_group(&mut self, need: HashMap<EntityType, usize>) -> u32 {
         let group_id = self.next_group_id;
         self.next_group_id += 1;
-        self.groups.insert(group_id, Group::new(group_id, need));
+        self.groups.push(Group::new(group_id, need));
         group_id
     }
 
@@ -219,7 +219,7 @@ impl Bot {
     }
 
     fn update_group_targets(&mut self) {
-        for group in self.groups.values_mut() {
+        for group in self.groups.iter_mut() {
             if group.is_empty() {
                 continue;
             }
@@ -320,7 +320,7 @@ impl Bot {
 
     #[cfg(feature = "enable_debug")]
     fn debug_update_groups(&self, debug: &mut debug::Debug) {
-        for group in self.groups.values() {
+        for group in self.groups.iter() {
             if group.is_empty() {
                 continue;
             }
@@ -345,12 +345,8 @@ impl Bot {
             );
         }
         debug.add_static_text(String::from("Groups:"));
-        let mut group_ids: Vec<usize> = self.groups.keys().cloned().collect();
-        group_ids.sort();
-        for group_id in group_ids.iter() {
-            let group = &self.groups[group_id];
+        for group in self.groups.iter() {
             debug.add_static_text(format!("{}) has={:?} target={:?} state={:?}", group.id(), group.has(), group.target(), group.state()));
         }
     }
 }
-

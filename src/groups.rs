@@ -12,7 +12,7 @@ pub enum GroupState {
 
 #[derive(Debug)]
 pub struct Group {
-    id: usize,
+    id: u32,
     state: GroupState,
     target: Option<Vec2i>,
     has: HashMap<EntityType, usize>,
@@ -22,7 +22,7 @@ pub struct Group {
 }
 
 impl Group {
-    pub fn new(id: usize, need: HashMap<EntityType, usize>) -> Self {
+    pub fn new(id: u32, need: HashMap<EntityType, usize>) -> Self {
         Self {
             id,
             state: GroupState::New,
@@ -34,7 +34,7 @@ impl Group {
         }
     }
 
-    pub fn id(&self) -> usize {
+    pub fn id(&self) -> u32 {
         self.id
     }
 

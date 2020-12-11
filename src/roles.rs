@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use model::{
     AttackAction,
     AutoAttack,
@@ -34,21 +32,21 @@ pub enum Role {
         building_id: i32,
     },
     GroupMember {
-        group_id: usize,
+        group_id: u32,
     },
     GroupSupplier {
-        group_id: usize,
+        group_id: u32,
     },
 }
 
 impl Role {
-    pub fn get_action(&self, entity: &Entity, world: &World, groups: &HashMap<usize, Group>) -> EntityAction {
+    pub fn get_action(&self, entity: &Entity, world: &World, groups: &Vec<Group>) -> EntityAction {
         match self {
             Role::Harvester { position, resource_id } => harvest_resources(entity, world, *position, *resource_id),
             Role::UnitBuilder => build_unit(entity, world),
             Role::BuildingBuilder { position, entity_type } => build_building(entity, world, *position, entity_type),
             Role::BuildingRepairer { building_id: base_id } => repair_building(entity, world, *base_id),
-            Role::GroupMember { group_id } => assist_group(entity, world, &groups[group_id]),
+            Role::GroupMember { group_id } => assist_group(entity, world, groups.iter().find(|v| v.id() == *group_id).unwrap()),
             Role::GroupSupplier { .. } => build_unit(entity, world),
             Role::None => get_default_action(entity, world),
         }
