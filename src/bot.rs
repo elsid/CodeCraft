@@ -12,12 +12,12 @@ use model::{Color, DebugState};
 
 #[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
-use crate::my_strategy::{Config, EntityField, Field, Group, GroupField, GroupState, InfluenceField, is_protected_entity_type, Path, Positionable, Role, Stats, Task, TaskManager, World};
+use crate::my_strategy::{Config, EntityField, Field, Group, GroupField, GroupState, InfluenceField, is_protected_entity_type, Path, Positionable, Rect, Role, Stats, Task, TaskManager, Vec2i, visit_range, World};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
     Vec2f,
-    Vec2i,
+    visit_square,
 };
 
 pub struct Bot {
@@ -72,10 +72,22 @@ impl Bot {
             debug_interface.send(model::DebugCommand::SetAutoFlush { enable: false });
         }
         let mut debug = debug::Debug::new(state);
+        let mut features: Vec<String> = Vec::new();
+        #[cfg(feature = "use_group_field")]
+            features.push(String::from("use_group_field"));
+        debug.add_static_text(format!("Features: {:?}", features));
         self.world.debug_update(&mut debug);
         self.influence_field.debug_update(&mut debug);
         self.path.debug_update(&mut debug);
         debug.add_static_text(format!("Opening: {}", self.opening));
+        for entity in self.world.my_entities() {
+            if matches!(entity.entity_type, EntityType::RangedUnit) {
+                if let Some(field) = self.entity_fields.get(&entity.id) {
+                    field.debug_update(entity, &mut debug);
+                    break;
+                }
+            }
+        }
         self.debug_update_groups(&mut debug);
         self.debug_update_entities(&mut debug);
         self.tasks.debug_update(&mut debug);
@@ -87,6 +99,10 @@ impl Bot {
         self.update_stats();
         self.update_roles();
         self.update_groups();
+        #[cfg(feature = "use_group_field")]
+            self.field.update(&self.groups, &self.world);
+        #[cfg(feature = "use_group_field")]
+            self.update_group_fields();
         self.update_tasks();
         self.update_group_targets();
     }
@@ -254,45 +270,89 @@ impl Bot {
     }
 
     fn update_group_targets(&mut self) {
-        for group in self.groups.iter_mut() {
-            if group.is_empty() {
+        let mut busy: Vec<Rect> = Vec::new();
+        for i in 0..self.groups.len() {
+            if self.groups[i].is_empty() || self.groups[i].power() == 0 {
                 continue;
             }
-            let position = group.position();
-            let world = &self.world;
-            if self.world.get_my_entity_count_of(&EntityType::MeleeUnit) + self.world.get_my_entity_count_of(&EntityType::RangedUnit) < 15 {
-                if let Some(target) = self.world.opponent_entities()
-                    .filter(|v| {
-                        world.is_inside_protected_perimeter(v.center(world.get_entity_properties(&v.entity_type).size))
-                    })
-                    .min_by_key(|entity| {
-                        let properties = world.get_entity_properties(&entity.entity_type);
-                        let entity_center = entity.center(properties.size);
-                        let distance_to_my_entity = world.my_entities()
-                            .filter(|v| is_protected_entity_type(&v.entity_type))
-                            .map(|v| v.center(world.get_entity_properties(&v.entity_type).size).distance(entity_center))
-                            .min();
-                        (distance_to_my_entity, entity_center.distance(position), entity.id)
-                    }) {
-                    group.set_target(Some(target.position()));
-                } else {
-                    let target = self.world.my_turrets()
-                        .min_by_key(|v| {
-                            v.center(world.get_entity_properties(&v.entity_type).size).distance(position)
-                        })
-                        .map(|v| v.position())
-                        .unwrap_or(self.world.start_position());
-                    group.set_target(Some(target));
-                }
+            let target = if cfg!(feature = "use_group_field") {
+                let group = &self.groups[i];
+                let target = self.get_group_target_by_group_field(group, &self.group_fields[i], &busy);
+                target.map(|v| {
+                    let size = (group.units_count() as f32).sqrt().ceil() as i32;
+                    let radius = size / 2 + (size % 2 == 0) as i32;
+                    busy.push(Rect::new(v - Vec2i::both(radius), v + Vec2i::both(radius)));
+                });
+                target
             } else {
-                if let Some(target) = self.world.opponent_entities()
-                    .min_by_key(|v| (v.center(world.get_entity_properties(&v.entity_type).size).distance(position), v.id)) {
-                    group.set_target(Some(target.position()));
-                } else {
-                    group.set_target(Some(position));
-                }
+                Some(self.get_group_target_naive(&self.groups[i]))
+            };
+            self.groups[i].set_target(target);
+        }
+    }
+
+    fn get_group_target_naive(&self, group: &Group) -> Vec2i {
+        let position = group.position();
+        let world = &self.world;
+        if self.world.get_my_entity_count_of(&EntityType::MeleeUnit) + self.world.get_my_entity_count_of(&EntityType::RangedUnit) < 15 {
+            if let Some(target) = self.world.opponent_entities()
+                .filter(|v| {
+                    world.is_inside_protected_perimeter(v.center(world.get_entity_properties(&v.entity_type).size))
+                })
+                .min_by_key(|entity| {
+                    let properties = world.get_entity_properties(&entity.entity_type);
+                    let entity_center = entity.center(properties.size);
+                    let distance_to_my_entity = world.my_entities()
+                        .filter(|v| is_protected_entity_type(&v.entity_type))
+                        .map(|v| v.center(world.get_entity_properties(&v.entity_type).size).distance(entity_center))
+                        .min();
+                    (distance_to_my_entity, entity_center.distance(position), entity.id)
+                }) {
+                target.position()
+            } else {
+                self.world.my_turrets()
+                    .min_by_key(|v| {
+                        v.center(world.get_entity_properties(&v.entity_type).size).distance(position)
+                    })
+                    .map(|v| v.position())
+                    .unwrap_or(self.world.start_position())
+            }
+        } else {
+            if let Some(target) = self.world.opponent_entities()
+                .min_by_key(|v| (v.center(world.get_entity_properties(&v.entity_type).size).distance(position), v.id)) {
+                target.position()
+            } else {
+                position
             }
         }
+    }
+
+    fn get_group_target_by_group_field(&self, group: &Group, group_field: &GroupField, busy: &Vec<Rect>) -> Option<Vec2i> {
+        if group.is_empty() || group.power() == 0 {
+            return None;
+        }
+        let (mut max_score, mut optimal_position, mut min_score_ratio) = group.target()
+            .filter(|target| busy.iter().all(|v| !v.contains(*target)))
+            .map(|target| (group_field.get_segment_position_score(target / self.config.segment_size), Some(target), self.config.group_min_score_ratio))
+            .unwrap_or((-std::f32::MAX, None, 0.0));
+        let bounds = Rect::new(Vec2i::zero(), Vec2i::both(self.world.map_size() / self.config.segment_size));
+        let range = if self.opening || matches!(group.state(), GroupState::New) {
+            self.world.get_protected_radius()
+        } else {
+            2 * self.world.map_size()
+        } / self.config.segment_size;
+        visit_range(self.world.start_position() / self.config.segment_size, 1, range, &bounds, |segment_position| {
+            if Some(segment_position) == optimal_position {
+                return;
+            }
+            let score = group_field.get_segment_position_score(segment_position);
+            if max_score < score && (max_score.signum() != score.signum() || score / max_score - 1.0 >= min_score_ratio) {
+                max_score = score;
+                optimal_position = Some(segment_position * self.config.segment_size);
+                min_score_ratio = 0.0;
+            }
+        });
+        optimal_position
     }
 
     #[cfg(feature = "enable_debug")]
@@ -378,8 +438,22 @@ impl Bot {
             );
         }
         debug.add_static_text(String::from("Groups:"));
-        for group in self.groups.iter() {
-            debug.add_static_text(format!("{}) has={:?} target={:?} state={:?}", group.id(), group.has(), group.target(), group.state()));
+        for i in 0..self.groups.len() {
+            let group = &self.groups[i];
+            let group_field = &self.group_fields[i];
+            let mut min_score = std::f32::MAX;
+            let mut max_score = -std::f32::MAX;
+            visit_square(Vec2i::zero(), self.world.map_size() / self.config.segment_size, |segment_position| {
+                let score = group_field.get_segment_position_score(segment_position);
+                min_score = min_score.min(score);
+                max_score = max_score.max(score);
+            });
+            debug.add_static_text(format!(
+                "{}) has={:?} position={:?} target={:?} state={:?} power={} score={:?} min_score={:?} max_score={:?}",
+                group.id(), group.has(), group.position(), group.target(), group.state(), group.power(),
+                group.target().map(|v| group_field.get_segment_position_score(v / self.config.segment_size)),
+                min_score, max_score
+            ));
         }
     }
 }

@@ -6,8 +6,8 @@ use model::Entity;
 use crate::my_strategy::{
     color_from_heat,
     debug,
-    Vec2f,
     Rect,
+    Vec2f,
 };
 use crate::my_strategy::{Field, position_to_index, Positionable, Tile, Vec2i, visit_range, World};
 

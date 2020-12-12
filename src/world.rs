@@ -194,6 +194,10 @@ impl World {
         self.map.borrow().get_tile(position)
     }
 
+    pub fn is_tile_locked(&self, position: Vec2i) -> bool {
+        self.map.borrow().is_tile_locked(position)
+    }
+
     pub fn population_use(&self) -> i32 {
         self.population_use
     }
@@ -557,6 +561,26 @@ impl World {
 
     pub fn get_player_power(&self, player_id: i32) -> i32 {
         self.player_power[self.players.iter().find_position(|v| v.id == player_id).unwrap().0]
+    }
+
+    pub fn visit_all_map_tiles<F: FnMut(Vec2i, Tile, bool)>(&self, f: F) {
+        self.map.borrow().visit_all_tiles(f);
+    }
+
+    pub fn visit_map_square<F: FnMut(Vec2i, Tile, bool)>(&self, position: Vec2i, size: i32, f: F) {
+        self.map.borrow().visit_square(position, size, f);
+    }
+
+    pub fn find_inside_map_square<F: FnMut(Vec2i, Tile, bool) -> bool>(&self, position: Vec2i, size: i32, f: F) -> Option<Vec2i> {
+        self.map.borrow().find_inside_square(position, size, f)
+    }
+
+    pub fn visit_map_range<F: FnMut(Vec2i, Tile, bool)>(&self, position: Vec2i, size: i32, range: i32, f: F) {
+        self.map.borrow().visit_range(position, size, range, f)
+    }
+
+    pub fn find_in_map_range<F: FnMut(Vec2i, Tile, bool) -> bool>(&self, position: Vec2i, size: i32, range: i32, f: F) -> Option<Vec2i> {
+        self.map.borrow().find_in_range(position, size, range, f)
     }
 }
 

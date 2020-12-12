@@ -1,4 +1,10 @@
 {
+  "group_min_score_ratio": {
+    "type": "bounded_float",
+    "min": 0.0,
+    "max": 1.0,
+    "index": 0
+  },
   "group_distance_to_position_weight": {
     "type": "max_float",
     "max": 0.0,

@@ -231,6 +231,16 @@ impl Vec2i {
     }
 
     #[inline(always)]
+    pub fn with_dx(&self, dx: i32) -> Self {
+        Self::new(self.x + dx, self.y)
+    }
+
+    #[inline(always)]
+    pub fn with_dy(&self, dy: i32) -> Self {
+        Self::new(self.x, self.y + dy)
+    }
+
+    #[inline(always)]
     pub const fn both(value: i32) -> Self {
         Self { x: value, y: value }
     }
@@ -280,6 +290,15 @@ impl From<Vec2f> for Vec2i {
 impl From<Vec2I32> for Vec2i {
     fn from(value: Vec2I32) -> Self {
         Self::new(value.x, value.y)
+    }
+}
+
+impl Neg for Vec2i {
+    type Output = Self;
+
+    #[inline(always)]
+    fn neg(self) -> Self::Output {
+        Self::new(-self.x, -self.y)
     }
 }
 

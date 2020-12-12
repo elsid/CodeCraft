@@ -4,7 +4,7 @@ use std::collections::BinaryHeap;
 use model::Color;
 use model::EntityType;
 
-use crate::my_strategy::{index_to_position, position_to_index, Vec2i, Rect};
+use crate::my_strategy::{index_to_position, position_to_index, Rect, Vec2i};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::debug;
 

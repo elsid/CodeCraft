@@ -1,5 +1,6 @@
 {
   "segment_size": 5,
+  "group_min_score_ratio": 0.1,
   "group_distance_to_position_weight": -1.0,
   "group_my_attack_range_power_weight": 1.0,
   "group_opponent_attack_range_power_weight": -1.0,

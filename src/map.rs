@@ -112,6 +112,32 @@ impl Map {
         position_to_index(position, self.size)
     }
 
+    pub fn visit_all_tiles<F: FnMut(Vec2i, Tile, bool)>(&self, mut f: F) {
+        for i in 0..self.tiles.len() {
+            f(index_to_position(i, self.size), self.tiles[i], self.locked[i]);
+        }
+    }
+
+    pub fn visit_square<F: FnMut(Vec2i, Tile, bool)>(&self, position: Vec2i, size: i32, mut f: F) {
+        visit_square(position, size, |tile_position| {
+            f(tile_position, self.get_tile(tile_position), self.is_tile_locked(tile_position))
+        });
+    }
+
+    pub fn visit_range<F: FnMut(Vec2i, Tile, bool)>(&self, position: Vec2i, size: i32, range: i32, mut f: F) {
+        let bounds = Rect::new(Vec2i::zero(), Vec2i::both(self.size as i32));
+        visit_range(position, size, range, &bounds, |tile_position| {
+            f(tile_position, self.get_tile(tile_position), self.is_tile_locked(tile_position))
+        });
+    }
+
+    pub fn find_in_range<F: FnMut(Vec2i, Tile, bool) -> bool>(&self, position: Vec2i, size: i32, range: i32, mut f: F) -> Option<Vec2i> {
+        let bounds = Rect::new(Vec2i::zero(), Vec2i::both(self.size as i32));
+        find_in_range(position, size, range, &bounds, |tile_position| {
+            f(tile_position, self.get_tile(tile_position), self.is_tile_locked(tile_position))
+        })
+    }
+
     pub fn find_inside_square<F: FnMut(Vec2i, Tile, bool) -> bool>(&self, position: Vec2i, size: i32, mut f: F) -> Option<Vec2i> {
         find_inside_rect(
             position,
@@ -277,6 +303,33 @@ pub fn visit_range<F: FnMut(Vec2i)>(position: Vec2i, size: i32, range: i32, boun
             range
         };
         for x in (position.x() - shift).max(bounds.min().x())..(position.x() + size + shift).min(bounds.max().x()) {
+            f(Vec2i::new(x, y))
+        }
+    }
+}
+
+pub fn find_in_range<F: FnMut(Vec2i) -> bool>(position: Vec2i, size: i32, range: i32, bounds: &Rect, mut f: F) -> Option<Vec2i> {
+    for y in (position.y() - range).max(bounds.min().y())..(position.y() + size + range).min(bounds.max().y()) {
+        let shift = if y < position.y() {
+            range - (position.y() - y)
+        } else if y >= position.y() + size {
+            range - (y - (position.y() + size - 1))
+        } else {
+            range
+        };
+        for x in (position.x() - shift).max(bounds.min().x())..(position.x() + size + shift).min(bounds.max().x()) {
+            let tile_position = Vec2i::new(x, y);
+            if f(tile_position) {
+                return Some(tile_position);
+            }
+        }
+    }
+    None
+}
+
+pub fn visit_square_with_bounds<F: FnMut(Vec2i)>(position: Vec2i, size: i32, bounds: &Rect, mut f: F) {
+    for y in position.y().max(bounds.min().y())..(position.y() + size).min(bounds.max().y()) {
+        for x in position.x().max(bounds.min().x())..(position.x() + size).min(bounds.max().x()) {
             f(Vec2i::new(x, y))
         }
     }
