@@ -42,8 +42,13 @@ impl TaskManager {
             match &self.tasks[task_id] {
                 Task::HarvestResources(..) => self.stats.harvest_resources -= 1,
                 Task::BuildBuilders => self.stats.build_builders -= 1,
-                Task::BuildBuilding(v) => if v.entity_type == EntityType::House {
-                    self.stats.build_house -= 1;
+                Task::BuildBuilding(v) => match v.entity_type {
+                    EntityType::House => self.stats.build_house -= 1,
+                    EntityType::Turret => self.stats.build_turret -= 1,
+                    EntityType::BuilderBase => self.stats.build_builder_base -= 1,
+                    EntityType::MeleeBase => self.stats.build_melee_base -= 1,
+                    EntityType::RangedBase => self.stats.build_ranged_base -= 1,
+                    _ => (),
                 }
                 Task::GatherGroup(..) => self.stats.gather_group -= 1,
                 Task::RepairBuildings => self.stats.repair_buildings -= 1,
