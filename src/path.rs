@@ -1,5 +1,3 @@
-use std::collections::BinaryHeap;
-
 #[cfg(feature = "enable_debug")]
 use model::Color;
 use model::EntityType;
@@ -119,7 +117,7 @@ impl Path {
         let start_index = position_to_index(start, self.map_size);
         self.distances[start_index] = 0;
 
-        let mut new: BinaryHeap<Vec2i> = BinaryHeap::new();
+        let mut new: Vec<Vec2i> = Vec::new();
         new.push(start);
 
         let mut open: Vec<bool> = std::iter::repeat(false)
