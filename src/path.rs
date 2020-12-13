@@ -120,10 +120,10 @@ impl Path {
         let mut new: Vec<Vec2i> = Vec::new();
         new.push(start);
 
-        let mut open: Vec<bool> = std::iter::repeat(false)
+        let mut open: Vec<bool> = std::iter::repeat(true)
             .take(self.distances.len())
             .collect();
-        open[start_index] = true;
+        open[start_index] = false;
 
         const EDGES: &[Vec2i] = &[
             Vec2i::only_x(1),
@@ -136,7 +136,7 @@ impl Path {
 
         while let Some(node_position) = new.pop() {
             let node_index = position_to_index(node_position, self.map_size);
-            open[node_index] = false;
+            open[node_index] = true;
             for &shift in EDGES.iter() {
                 let neighbor_position = node_position + shift;
                 if !bounds.contains(neighbor_position) || !map.is_passable(neighbor_position) {
@@ -147,8 +147,8 @@ impl Path {
                 if new_distance < self.distances[neighbor_index] {
                     self.distances[neighbor_index] = new_distance;
                     self.backtrack[neighbor_index] = node_index;
-                    if !open[neighbor_index] {
-                        open[neighbor_index] = true;
+                    if open[neighbor_index] {
+                        open[neighbor_index] = false;
                         new.push(neighbor_position);
                     }
                 }
