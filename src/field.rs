@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use model::{AttackProperties, Entity, EntityProperties, EntityType};
+use model::EntityType;
 #[cfg(feature = "enable_debug")]
 use model::Color;
 
@@ -8,30 +8,26 @@ use crate::my_strategy::{
     debug,
     Vec2f,
 };
-use crate::my_strategy::{Config, Group, index_to_position, position_to_index, Positionable, Vec2i, visit_range, visit_square, World};
+use crate::my_strategy::{Config, index_to_position, position_to_index, Positionable, Vec2i, visit_range, visit_square, World};
 
 #[derive(Default, Clone)]
 struct PlayerFragment {
-    sight_range_power: f32,
-    attack_range_power: f32,
-    destroy_score: f32,
-    sight_score: f32,
+    dynamic_sight_range_power: f32,
+    static_sight_range_power: f32,
+    dynamic_attack_range_power: f32,
+    static_attack_range_power: f32,
+    dynamic_military_destroy_score: f32,
+    dynamic_economy_destroy_score: f32,
+    static_destroy_score: f32,
+    dynamic_sight_score: f32,
+    static_sight_score: f32,
 }
 
 #[derive(Default, Clone)]
 struct Fragment {
-    my_static_sight_range_power: f32,
-    my_static_attack_range_power: f32,
-    my_static_destroy_score: f32,
-    my_group_in_attack_range_scores: Vec<(usize, f32)>,
-    my_group_in_sight_range_scores: Vec<(usize, f32)>,
-    my_entities_in_attack_range_scores: Vec<(i32, f32)>,
-    my_entities_in_sight_range_scores: Vec<(i32, f32)>,
     resource: f32,
-    opponent_sight_range_power: f32,
-    opponent_attack_range_power: f32,
-    opponent_destroy_score: f32,
     player_fragments: Vec<PlayerFragment>,
+    score: f32,
 }
 
 pub struct Field {
@@ -51,19 +47,12 @@ impl Field {
         }
     }
 
-    pub fn update(&mut self, groups: &Vec<Group>, world: &World) {
+    pub fn update(&mut self, world: &World) {
         if self.players.len() != world.players().len() {
             self.players = world.players().iter().map(|v| v.id).collect();
         }
         let bounds = world.bounds();
         for fragment in self.fragments.iter_mut() {
-            fragment.my_static_sight_range_power = 0.0;
-            fragment.my_static_attack_range_power = 0.0;
-            fragment.my_static_destroy_score = 0.0;
-            fragment.my_group_in_attack_range_scores.clear();
-            fragment.my_group_in_sight_range_scores.clear();
-            fragment.my_entities_in_attack_range_scores.clear();
-            fragment.my_entities_in_sight_range_scores.clear();
             fragment.resource = 0.0;
             for v in fragment.player_fragments.iter_mut() {
                 *v = PlayerFragment::default();
@@ -76,98 +65,93 @@ impl Field {
             if let Some(player_id) = entity.player_id {
                 let player_index = self.players.iter().find_position(|v| **v == player_id).unwrap().0;
                 let properties = world.get_entity_properties(&entity.entity_type);
+                visit_square(entity.position(), properties.size, |position| {
+                    let fragment = &mut self.fragments[position_to_index(position, self.size)];
+                    if properties.can_move {
+                        if matches!(entity.entity_type, EntityType::BuilderUnit) {
+                            fragment.player_fragments[player_index].dynamic_economy_destroy_score += properties.destroy_score as f32;
+                        } else {
+                            fragment.player_fragments[player_index].dynamic_military_destroy_score += properties.destroy_score as f32;
+                        }
+                    } else {
+                        fragment.player_fragments[player_index].static_destroy_score += properties.destroy_score as f32;
+                    }
+                });
+                visit_range(entity.position(), properties.size, properties.sight_range, &bounds, |position| {
+                    let fragment = &mut self.fragments[position_to_index(position, self.size)];
+                    fragment.player_fragments[player_index].static_sight_score += 1.0;
+                });
+                let entity_center = entity.center_f(properties.size);
                 if let Some(attack) = properties.attack.as_ref() {
+                    let power = entity.health * attack.damage;
                     visit_range(entity.position(), properties.size, attack.attack_range, &bounds, |position| {
                         let fragment = &mut self.fragments[position_to_index(position, self.size)];
-                        if player_id == world.my_id() {
-                            let score = get_range_score(position, entity.id, world, |_, v| v.attack_range);
-                            fragment.my_entities_in_attack_range_scores.push((entity.id, score));
+                        let score = field_function(
+                            entity_center.manhattan_distance(position.center()) as f32,
+                            power as f32,
+                            (properties.size - 1 + attack.attack_range) as f32,
+                        ).min(power as f32);
+                        if properties.can_move {
+                            fragment.player_fragments[player_index].dynamic_attack_range_power += score;
+                        } else {
+                            fragment.player_fragments[player_index].static_attack_range_power += score;
                         }
-                        fragment.player_fragments[player_index].attack_range_power += get_range_score(position, entity.id, world, |_, v| v.attack_range);
                     });
                     visit_range(entity.position(), properties.size, properties.sight_range, &bounds, |position| {
                         let fragment = &mut self.fragments[position_to_index(position, self.size)];
-                        if player_id == world.my_id() {
-                            let score = get_range_score(position, entity.id, world, |v, _| v.sight_range);
-                            fragment.my_entities_in_sight_range_scores.push((entity.id, score));
+                        let score = field_function(
+                            entity_center.manhattan_distance(position.center()) as f32,
+                            power as f32,
+                            (properties.size - 1 + properties.sight_range) as f32,
+                        ).min(power as f32);
+                        if properties.can_move {
+                            fragment.player_fragments[player_index].dynamic_sight_range_power += score;
+                        } else {
+                            fragment.player_fragments[player_index].static_sight_range_power += score;
                         }
-                        fragment.player_fragments[player_index].sight_range_power += get_range_score(position, entity.id, world, |v, _| v.sight_range);
                     });
                 }
-                if player_id == world.my_id() && is_static(&entity.entity_type) {
-                    if let Some(attack) = properties.attack.as_ref() {
-                        let power = (attack.damage * entity.health) as f32;
-                        visit_range(entity.position(), properties.size, properties.sight_range, &bounds, |position| {
-                            let fragment = &mut self.fragments[position_to_index(position, self.size)];
-                            let distance = position.center().manhattan_distance(entity.center_f(properties.size)) as f32;
-                            fragment.my_static_sight_range_power += field_function(distance, power, properties.sight_range as f32);
-                        });
-                        visit_range(entity.position(), properties.size, attack.attack_range, &bounds, |position| {
-                            let fragment = &mut self.fragments[position_to_index(position, self.size)];
-                            let distance = position.center().manhattan_distance(entity.center_f(properties.size)) as f32;
-                            fragment.my_static_attack_range_power += field_function(distance, power, attack.attack_range as f32);
-                        });
-                    }
-                    visit_square(entity.position(), properties.size, |position| {
-                        let fragment = &mut self.fragments[position_to_index(position, self.size)];
-                        fragment.my_static_destroy_score += properties.destroy_score as f32;
-                    });
-                }
-                if player_id != world.my_id() {
-                    visit_square(entity.position(), properties.size, |position| {
-                        let fragment = &mut self.fragments[position_to_index(position, self.size)];
-                        fragment.player_fragments[player_index].destroy_score += properties.destroy_score as f32;
-                    });
-                }
-                visit_range(entity.position(), properties.size, properties.sight_range, &bounds, |position| {
-                    let fragment = &mut self.fragments[position_to_index(position, self.size)];
-                    fragment.player_fragments[player_index].sight_score += properties.destroy_score as f32;
-                });
             }
             if matches!(entity.entity_type, EntityType::Resource) {
                 let fragment = &mut self.fragments[position_to_index(entity.position(), self.size)];
                 fragment.resource += 1.0;
             }
         }
-        let my_player_index = self.players.iter().find_position(|v| **v == world.my_id()).unwrap().0;
         for i in 0..self.fragments.len() {
-            let position = index_to_position(i, self.size);
-            let fragment = &mut self.fragments[i];
-            let mut opponent_attack_range_power = 0.0;
-            let mut opponent_sight_range_power = 0.0;
-            let mut opponent_destroy_score = 0.0;
-            for i in 0..fragment.player_fragments.len() {
-                if i != my_player_index {
-                    opponent_attack_range_power += fragment.opponent_attack_range_power;
-                    opponent_sight_range_power += fragment.opponent_sight_range_power;
-                    opponent_destroy_score += fragment.opponent_destroy_score;
+            let mut score = 0.0
+                + self.fragments[i].resource * self.config.resource_weight;
+            let mut opponent_power_score = 0.0;
+            for j in 0..self.players.len() {
+                if self.players[j] != world.my_id() {
+                    let player_fragment = &self.fragments[i].player_fragments[j];
+                    opponent_power_score += 0.0
+                        + player_fragment.dynamic_attack_range_power * self.config.opponent_dynamic_attack_range_power_weight
+                        + player_fragment.static_attack_range_power * self.config.opponent_static_attack_range_power_weight
+                        + player_fragment.dynamic_sight_range_power * self.config.opponent_dynamic_sight_range_power_weight
+                        + player_fragment.static_sight_range_power * self.config.opponent_static_sight_range_power_weight;
+                    score += opponent_power_score
+                        + player_fragment.dynamic_military_destroy_score * self.config.opponent_dynamic_military_destroy_score_weight
+                        + player_fragment.dynamic_economy_destroy_score * self.config.opponent_dynamic_economy_destroy_score_weight
+                        + player_fragment.static_destroy_score * self.config.opponent_static_destroy_score_weight
+                        + player_fragment.dynamic_sight_score * self.config.opponent_dynamic_sight_score_weight
+                        + player_fragment.static_sight_score * self.config.opponent_static_sight_score_weight;
                 }
             }
-            fragment.opponent_attack_range_power = opponent_attack_range_power;
-            fragment.opponent_sight_range_power = opponent_sight_range_power;
-            fragment.opponent_destroy_score = opponent_destroy_score;
-            for group_index in 0..groups.len() {
-                let group = &groups[group_index];
-                let distance = position.distance(group.position());
-                let attack_range = group.sight_range() + group.radius();
-                if distance <= attack_range {
-                    let score = field_function(
-                        distance as f32,
-                        group.power() as f32,
-                        attack_range as f32,
-                    ).min(group.power() as f32);
-                    fragment.my_group_in_attack_range_scores.push((group_index, score));
-                }
-                let sight_range = group.sight_range() + group.radius();
-                if distance <= sight_range {
-                    let score = field_function(
-                        distance as f32,
-                        group.power() as f32,
-                        sight_range as f32,
-                    ).min(group.power() as f32);
-                    fragment.my_group_in_sight_range_scores.push((group_index, score));
+            for j in 0..self.players.len() {
+                if self.players[j] == world.my_id() {
+                    let player_fragment = &self.fragments[i].player_fragments[j];
+                    if opponent_power_score > 0.0 {
+                        score += 0.0
+                            + player_fragment.dynamic_economy_destroy_score * self.config.my_dynamic_economy_destroy_score_weight
+                            + player_fragment.static_destroy_score * self.config.my_static_destroy_score_weight;
+                    }
+                    score += 0.0
+                        + player_fragment.static_attack_range_power * self.config.my_static_attack_range_power_weight
+                        + player_fragment.static_sight_range_power * self.config.my_static_sight_range_power_weight;
+                    break;
                 }
             }
+            self.fragments[i].score = score;
         }
     }
 
@@ -179,91 +163,19 @@ impl Field {
         let fragment = &self.fragments[position_to_index(position, self.size)];
         let player_fragment = &fragment.player_fragments[player_index];
         0.0
-            + player_fragment.destroy_score
-            + player_fragment.attack_range_power
-            + player_fragment.sight_range_power
-            + player_fragment.sight_score
+            + player_fragment.dynamic_attack_range_power
+            + player_fragment.static_attack_range_power
+            + player_fragment.dynamic_sight_range_power
+            + player_fragment.static_sight_range_power
+            + player_fragment.dynamic_military_destroy_score
+            + player_fragment.dynamic_economy_destroy_score
+            + player_fragment.static_destroy_score
+            + player_fragment.dynamic_sight_score
+            + player_fragment.static_sight_score
     }
 
-    pub fn get_group_score(&self, position: Vec2i, group: &Group, groups: &Vec<Group>) -> f32 {
-        let group_index = groups.iter().find_position(|v| v.id() == group.id()).unwrap().0;
-        let fragment = &self.fragments[position_to_index(position, self.size)];
-        let my_attack_range_power = if fragment.opponent_attack_range_power > 0.0 {
-            group.power() as f32
-                + fragment.my_static_attack_range_power
-                + fragment.my_group_in_attack_range_scores.iter()
-                .filter(|(index, score)| *index != group_index && *score > 0.0)
-                .filter_map(|(index, score)| {
-                    let my_group = &groups[*index];
-                    if my_group.is_empty() || my_group.power() == 0 {
-                        return None;
-                    }
-                    Some(*score)
-                })
-                .sum::<f32>()
-        } else {
-            fragment.my_static_attack_range_power * self.config.group_my_static_attack_range_power_weight
-        };
-        let my_sight_range_power = if fragment.opponent_sight_range_power > 0.0 {
-            group.power() as f32
-                + fragment.my_static_sight_range_power
-                + fragment.my_group_in_sight_range_scores.iter()
-                .filter(|(index, score)| *index != group_index && *score > 0.0)
-                .filter_map(|(index, score)| {
-                    let my_group = &groups[*index];
-                    if my_group.is_empty() || my_group.power() == 0 {
-                        return None;
-                    }
-                    Some(*score)
-                })
-                .sum::<f32>()
-        } else {
-            0.0
-        };
-        0.0
-            + group.position().distance(position) as f32 * self.config.group_distance_to_position_weight
-            + my_attack_range_power * self.config.group_my_attack_range_power_weight
-            + fragment.opponent_attack_range_power * self.config.group_opponent_attack_range_power_weight
-            + my_sight_range_power * self.config.group_my_sight_range_power_weight
-            + fragment.opponent_sight_range_power * self.config.group_opponent_sight_range_power_weight
-            + ((fragment.opponent_sight_range_power > 0.0) as i32 * group.destroy_score()) as f32 * self.config.group_my_destroy_score_weight
-            + ((fragment.opponent_sight_range_power > 0.0) as i32) as f32 * fragment.my_static_destroy_score * self.config.group_my_static_destroy_score_weight
-            + fragment.opponent_destroy_score * self.config.group_opponent_destroy_score_weight
-    }
-
-    pub fn get_entity_score(&self, position: Vec2i, unit: &Entity, world: &World) -> f32 {
-        let properties = world.get_entity_properties(&unit.entity_type);
-        let power = if let Some(attack) = properties.attack.as_ref() {
-            (unit.health * attack.damage) as f32
-        } else {
-            0.0
-        };
-        let fragment = &self.fragments[position_to_index(position, self.size)];
-        let my_attack_range_power = if fragment.opponent_attack_range_power > 0.0 {
-            power
-                + fragment.my_entities_in_attack_range_scores.iter()
-                .filter(|(entity_id, score)| *entity_id != unit.id && *score > 0.0)
-                .map(|(_, score)| *score)
-                .sum::<f32>()
-        } else {
-            fragment.my_static_attack_range_power * self.config.group_my_static_attack_range_power_weight
-        };
-        let my_sight_range_power = if fragment.opponent_sight_range_power > 0.0 {
-            power
-                + fragment.my_entities_in_sight_range_scores.iter()
-                .filter(|(entity_id, score)| *entity_id != unit.id && *score > 0.0)
-                .map(|(_, score)| *score)
-                .sum::<f32>()
-        } else {
-            0.0
-        };
-        0.0
-            + unit.position().distance(position) as f32 * self.config.entity_distance_to_position_weight
-            + my_attack_range_power as f32 * self.config.entity_my_attack_range_power_weight
-            + fragment.opponent_attack_range_power * self.config.entity_opponent_attack_range_power_weight
-            + my_sight_range_power as f32 * self.config.entity_my_sight_range_power_weight
-            + fragment.opponent_sight_range_power * self.config.entity_opponent_sight_range_power_weight
-            + fragment.opponent_destroy_score * self.config.entity_opponent_destroy_score_weight
+    pub fn get_score(&self, position: Vec2i) -> f32 {
+        self.fragments[position_to_index(position, self.size)].score
     }
 
     #[cfg(feature = "enable_debug")]
@@ -271,16 +183,14 @@ impl Field {
         let mut min_score = std::f32::MAX;
         let mut max_score = -std::f32::MAX;
         for i in 0..self.size * self.size {
-            let fragment = &self.fragments[i];
-            let score = fragment.opponent_sight_range_power;
+            let score = self.get_score(index_to_position(i, self.size));
             min_score = score.min(score);
             max_score = score.max(score);
         }
         let norm = (max_score - min_score).max(1.0) as f32;
         for i in 0..self.size * self.size {
             let position = index_to_position(i, self.size);
-            let fragment = &self.fragments[i];
-            let score = fragment.opponent_sight_range_power;
+            let score = self.get_score(position);
             debug.add_world_square(
                 Vec2f::from(position),
                 1.0,
@@ -298,28 +208,6 @@ impl Field {
 
 pub fn field_function(distance: f32, factor: f32, max: f32) -> f32 {
     factor - factor * distance / max
-}
-
-pub fn is_static(entity_type: &EntityType) -> bool {
-    match entity_type {
-        EntityType::House | EntityType::BuilderBase | EntityType::MeleeBase | EntityType::RangedBase | EntityType::Resource | EntityType::Turret => true,
-        _ => false,
-    }
-}
-
-fn get_range_score<F: Fn(&EntityProperties, &AttackProperties) -> i32>(position: Vec2i, entity_id: i32, world: &World, get_range: F) -> f32 {
-    let entity = world.get_entity(entity_id);
-    let entity_properties = world.get_entity_properties(&entity.entity_type);
-    if let Some(entity_attack) = entity_properties.attack.as_ref() {
-        let power = entity.health * entity_attack.damage;
-        field_function(
-            entity.center_f(entity_properties.size).manhattan_distance(position.center()) as f32,
-            power as f32,
-            (entity_properties.size - 1 + get_range(&entity_properties, &entity_attack)) as f32,
-        ).min(power as f32)
-    } else {
-        0.0
-    }
 }
 
 #[cfg(feature = "enable_debug")]

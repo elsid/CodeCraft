@@ -100,7 +100,11 @@ impl Bot {
             features.push(String::from("use_entity_planner"));
         debug.add_static_text(format!("Features: {:?}", features));
         self.world.debug_update(&mut debug);
-        self.influence_field.debug_update(&mut debug);
+        // self.field.debug_update(&mut debug);
+        for i in 0..self.groups.len() {
+            self.group_fields[i].debug_update(&mut debug);
+            break;
+        }
         self.path.debug_update(&mut debug);
         debug.add_static_text(format!("Opening: {}", self.opening));
         self.debug_update_groups(&mut debug);
@@ -118,7 +122,7 @@ impl Bot {
         self.update_roles();
         self.update_groups();
         #[cfg(any(feature = "use_group_field", feature = "use_entity_field"))]
-            self.field.update(&self.groups, &self.world);
+            self.field.update(&self.world);
         #[cfg(feature = "use_group_field")]
             self.update_group_fields();
         #[cfg(feature = "use_entity_field")]
@@ -323,14 +327,7 @@ impl Bot {
                 continue;
             }
             let target = if cfg!(feature = "use_group_field") {
-                let group = &self.groups[i];
-                let target = self.get_group_target_by_group_field(group, &self.group_fields[i], &busy);
-                target.map(|v| {
-                    let size = (group.units_count() as f32).sqrt().ceil() as i32;
-                    let radius = size / 2 + (size % 2 == 0) as i32;
-                    busy.push(Rect::new(v - Vec2i::both(radius), v + Vec2i::both(radius)));
-                });
-                target
+                self.get_group_target_by_group_field(&self.groups[i], &self.group_fields[i])
             } else if cfg!(feature = "use_group_planner") {
                 self.get_group_target_by_planner(&self.groups[i], &self.group_planners[i])
             } else {
@@ -376,16 +373,13 @@ impl Bot {
         }
     }
 
-    fn get_group_target_by_group_field(&self, group: &Group, group_field: &GroupField, busy: &Vec<Rect>) -> Option<Vec2i> {
-        if group.is_empty() || group.power() == 0 {
-            return None;
-        }
+    fn get_group_target_by_group_field(&self, group: &Group, group_field: &GroupField) -> Option<Vec2i> {
         let (mut max_score, mut optimal_position, mut min_score_ratio) = group.target()
-            .filter(|target| busy.iter().all(|v| !v.contains(*target)))
             .map(|target| (group_field.get_segment_position_score(target / self.config.segment_size), Some(target), self.config.group_min_score_ratio))
             .unwrap_or((-std::f32::MAX, None, 0.0));
         let bounds = Rect::new(Vec2i::zero(), Vec2i::both(self.world.map_size() / self.config.segment_size));
-        let range = if self.opening || matches!(group.state(), GroupState::New) {
+        let defend = self.world.get_my_entity_count_of(&EntityType::MeleeUnit) + self.world.get_my_entity_count_of(&EntityType::RangedUnit) < 15;
+        let range = if self.opening || matches!(group.state(), GroupState::New) || defend {
             self.world.get_protected_radius()
         } else {
             2 * self.world.map_size()

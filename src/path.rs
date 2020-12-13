@@ -95,6 +95,11 @@ impl Path {
         self.start = Some(start);
     }
 
+    pub fn update_score<F: FnMut(Vec2i) -> i32>(&mut self, start: Vec2i, f: F) {
+        self.update_score_impl(start, f);
+        self.start = Some(start);
+    }
+
     #[cfg(feature = "enable_debug")]
     pub fn debug_update(&self, debug: &mut debug::Debug) {
         for i in 0..self.backtrack.len() {
@@ -157,12 +162,54 @@ impl Path {
             }
         }
     }
-}
 
-pub fn is_passable(entity_type: &EntityType) -> bool {
-    match entity_type {
-        EntityType::House | EntityType::BuilderBase | EntityType::MeleeBase | EntityType::RangedBase | EntityType::Resource | EntityType::Turret => false,
-        _ => true,
+    fn update_score_impl<F: FnMut(Vec2i) -> i32>(&mut self, start: Vec2i, mut get_cost: F) {
+        for value in self.distances.iter_mut() {
+            *value = std::i32::MAX;
+        }
+        for i in 0..self.backtrack.len() {
+            self.backtrack[i] = i;
+        }
+        let start_index = position_to_index(start, self.map_size);
+        self.distances[start_index] = 0;
+
+        let mut new: BinaryHeap<Vec2i> = BinaryHeap::new();
+        new.push(start);
+
+        let mut open: Vec<bool> = std::iter::repeat(false)
+            .take(self.distances.len())
+            .collect();
+        open[start_index] = true;
+
+        const EDGES: &[Vec2i] = &[
+            Vec2i::only_x(1),
+            Vec2i::only_x(-1),
+            Vec2i::only_y(1),
+            Vec2i::only_y(-1),
+        ];
+
+        let bounds = Rect::new(Vec2i::zero(), Vec2i::both(self.map_size as i32));
+
+        while let Some(node_position) = new.pop() {
+            let node_index = position_to_index(node_position, self.map_size);
+            open[node_index] = false;
+            for &shift in EDGES.iter() {
+                let neighbor_position = node_position + shift;
+                if !bounds.contains(neighbor_position) {
+                    continue;
+                }
+                let neighbor_index = position_to_index(neighbor_position, self.map_size);
+                let new_distance = self.distances[node_index] + get_cost(neighbor_position);
+                if new_distance < self.distances[neighbor_index] {
+                    self.distances[neighbor_index] = new_distance;
+                    self.backtrack[neighbor_index] = node_index;
+                    if !open[neighbor_index] {
+                        open[neighbor_index] = true;
+                        new.push(neighbor_position);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -249,6 +296,29 @@ mod tests {
             Vec2i::new(1, 1),
             Vec2i::new(1, 2),
             Vec2i::new(0, 2),
+        ]);
+    }
+
+    #[test]
+    fn score_zeo_surrounded_by_positive() {
+        let mut costs = vec![
+            1, 1, 1,
+            1, 3, 2,
+            1, 3, 0,
+        ];
+        let mut path = Path::new(3);
+        path.update_score(Vec2i::zero(), |position| {
+            costs[position_to_index(position, 3)]
+        });
+        assert_eq!(path.distances, vec![
+            0, 1, 2,
+            1, 4, 4,
+            2, 5, 4,
+        ]);
+        assert_eq!(path.backtrack, vec![
+            0, 0, 1,
+            0, 1, 2,
+            3, 8, 5,
         ]);
     }
 }

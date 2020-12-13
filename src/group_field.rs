@@ -13,7 +13,6 @@ pub struct GroupField {
     group_id: u32,
     size: i32,
     config: Config,
-    field_scores: Vec<f32>,
     area_field_scores: Vec<f32>,
     segment_scores: Vec<f32>,
 }
@@ -25,7 +24,6 @@ impl GroupField {
             group_id,
             size,
             config,
-            field_scores: std::iter::repeat(0.0).take((map_size * map_size) as usize).collect(),
             area_field_scores: std::iter::repeat(0.0).take((map_size * map_size) as usize).collect(),
             segment_scores: std::iter::repeat(0.0).take((size * size) as usize).collect(),
         }
@@ -40,9 +38,6 @@ impl GroupField {
     }
 
     pub fn update(&mut self, field: &Field, groups: &Vec<Group>) {
-        for v in self.field_scores.iter_mut() {
-            *v = 0.0;
-        }
         for v in self.area_field_scores.iter_mut() {
             *v = 0.0;
         }
@@ -56,19 +51,15 @@ impl GroupField {
         let segment_size = self.config.segment_size;
         let map_size = self.size * segment_size;
         let bounds = Rect::new(Vec2i::zero(), Vec2i::both(map_size));
-        for i in 0..self.field_scores.len() {
-            let position = index_to_position(i, map_size as usize);
-            self.field_scores[i] = field.get_group_score(position, group, groups);
-        }
         for i in 0..self.area_field_scores.len() {
             let position = index_to_position(i, map_size as usize);
             let mut sum_score = 0.0;
             let mut visited = 0;
-            visit_range(position, 1, 2, &bounds, |sub_position| {
+            visit_range(position, 1, group.sight_range(), &bounds, |sub_position| {
                 sum_score += field_function(
                     sub_position.distance(position) as f32,
-                    self.field_scores[position_to_index(sub_position, map_size as usize)] as f32,
-                    2.0,
+                    field.get_score(sub_position),
+                    group.sight_range() as f32,
                 );
                 visited += 1;
             });
