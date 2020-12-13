@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use model::{
     Entity,
@@ -49,6 +49,12 @@ pub struct World {
     player_power_time_series: Vec<Vec<i32>>,
     #[cfg(feature = "enable_debug")]
     player_destroy_score_time_series: Vec<Vec<i32>>,
+    #[cfg(feature = "enable_debug")]
+    player_spent_resource: Vec<i32>,
+    #[cfg(feature = "enable_debug")]
+    player_units_history: Vec<HashSet<i32>>,
+    #[cfg(feature = "enable_debug")]
+    player_total_resource_time_series: Vec<Vec<i32>>,
 }
 
 impl World {
@@ -90,6 +96,12 @@ impl World {
             player_power_time_series: std::iter::repeat(Vec::new()).take(player_view.players.len()).collect(),
             #[cfg(feature = "enable_debug")]
             player_destroy_score_time_series: std::iter::repeat(Vec::new()).take(player_view.players.len()).collect(),
+            #[cfg(feature = "enable_debug")]
+            player_spent_resource: std::iter::repeat(0).take(player_view.players.len()).collect(),
+            #[cfg(feature = "enable_debug")]
+            player_units_history: std::iter::repeat(HashSet::new()).take(player_view.players.len()).collect(),
+            #[cfg(feature = "enable_debug")]
+            player_total_resource_time_series: std::iter::repeat(Vec::new()).take(player_view.players.len()).collect(),
         }
     }
 
@@ -131,6 +143,23 @@ impl World {
                 .map(|entity| self.get_entity_properties(&entity.entity_type).destroy_score)
                 .sum();
             self.player_destroy_score_time_series[i].push(destroy_score);
+            let mut entities_count: Vec<i32> = std::iter::repeat(0)
+                .take(self.entity_properties.len())
+                .collect();
+            for entity in self.entities.iter() {
+                if entity.player_id == Some(player_id) {
+                    entities_count[entity.entity_type.clone() as usize] += 1;
+                }
+            }
+            for entity in self.entities.iter() {
+                if entity.player_id == Some(player_id) {
+                    if self.player_units_history[i].insert(entity.id) {
+                        self.player_spent_resource[i] += self.get_entity_properties(&entity.entity_type).initial_cost
+                            + entities_count[entity.entity_type.clone() as usize];
+                    }
+                }
+            }
+            self.player_total_resource_time_series[i].push(self.player_spent_resource[i] + self.players[i].resource);
         }
     }
 
@@ -431,6 +460,12 @@ impl World {
             2,
             String::from("Players destroy score"),
             self.player_destroy_score_time_series.iter().enumerate()
+                .map(|(i, v)| (v, debug::get_player_color(1.0, self.players[i].id))),
+        );
+        debug.add_time_series_i32(
+            3,
+            String::from("Players total resource"),
+            self.player_total_resource_time_series.iter().enumerate()
                 .map(|(i, v)| (v, debug::get_player_color(1.0, self.players[i].id))),
         );
     }
