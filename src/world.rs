@@ -399,8 +399,8 @@ impl World {
         *self.requested_resource.borrow_mut() -= amount;
     }
 
-    pub fn my_population(&self) -> i32 {
-        self.population_use - *self.allocated_population.borrow()
+    pub fn my_population_provide(&self) -> i32 {
+        self.population_provide - *self.allocated_population.borrow()
     }
 
     pub fn allocated_population(&self) -> i32 {
@@ -408,7 +408,7 @@ impl World {
     }
 
     pub fn try_allocated_resource_and_population(&self, resource: i32, population: i32) -> bool {
-        if self.my_resource() < resource || self.my_population() < population {
+        if self.my_resource() < resource || self.my_population_provide() < population {
             return false;
         }
         *self.allocated_resource.borrow_mut() += resource;
@@ -433,7 +433,7 @@ impl World {
         let allocated = self.allocated_resource();
         let requested = self.requested_resource();
         debug.add_static_text(format!("Resource: {} - {} a - {} r = {}", self.my_player().resource, allocated, requested, self.my_resource()));
-        debug.add_static_text(format!("Population: {} - {} a = {}", self.population_use(), self.allocated_population(), self.my_population()));
+        debug.add_static_text(format!("Population: {} - {} a = {}", self.population_use(), self.allocated_population(), self.my_population_provide()));
         let mut count_by_entity_type: BTreeMap<String, usize> = BTreeMap::new();
         for entity in self.my_entities() {
             match count_by_entity_type.entry(format!("{:?}", entity.entity_type)) {
