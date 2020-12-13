@@ -23,6 +23,13 @@ use crate::my_strategy::{
     Vec2f,
 };
 
+#[derive(Debug)]
+enum OpeningType {
+    None,
+    Round1,
+    Round2,
+}
+
 pub struct Bot {
     stats: Vec<(i32, Stats)>,
     roles: HashMap<i32, Role>,
@@ -31,7 +38,7 @@ pub struct Bot {
     tasks: TaskManager,
     world: World,
     actions: HashMap<i32, EntityAction>,
-    opening: bool,
+    opening: OpeningType,
     config: Config,
     entity_targets: HashMap<i32, Vec2i>,
     entity_planners: HashMap<i32, EntityPlanner>,
@@ -39,23 +46,30 @@ pub struct Bot {
 }
 
 impl Bot {
-    pub fn new(world: World, config: Config) -> Self {
-        let seed = world.entities().iter()
+    pub fn new(player_view: &PlayerView, config: Config) -> Self {
+        let seed = player_view.entities.iter()
             .map(|v| v.position.x as u64 + v.position.y as u64)
             .sum();
         Self {
             next_group_id: 0,
             groups: Vec::new(),
-            roles: world.my_entities().map(|v| (v.id, Role::None)).collect(),
-            stats: world.players().iter().map(|v| (v.id, Stats::new(v.id))).collect(),
+            roles: player_view.entities.iter()
+                .filter(|v| v.player_id == Some(player_view.my_id))
+                .map(|v| (v.id, Role::None)).collect(),
+            stats: player_view.players.iter().map(|v| (v.id, Stats::new(v.id))).collect(),
             tasks: TaskManager::new(),
             actions: HashMap::new(),
-            opening: true,
-            world,
-            config,
+            opening: if player_view.entities.iter()
+                .any(|v| v.player_id == Some(player_view.my_id) && matches!(v.entity_type, EntityType::RangedBase)) {
+                OpeningType::Round1
+            } else {
+                OpeningType::Round2
+            },
             entity_targets: HashMap::new(),
             entity_planners: HashMap::new(),
             rng: RefCell::new(StdRng::seed_from_u64(seed)),
+            world: World::new(player_view),
+            config,
         }
     }
 
@@ -75,7 +89,7 @@ impl Bot {
         }
         let mut debug = debug::Debug::new(state);
         self.world.debug_update(&mut debug);
-        debug.add_static_text(format!("Opening: {}", self.opening));
+        debug.add_static_text(format!("Opening: {:?}", self.opening));
         self.debug_update_groups(&mut debug);
         self.debug_update_entities(&mut debug);
         for entity_planner in self.entity_planners.values() {
@@ -130,8 +144,8 @@ impl Bot {
     }
 
     fn update_tasks(&mut self) {
-        if !self.opening || self.try_play_opening() {
-            self.opening = false;
+        if matches!(self.opening, OpeningType::None) || self.try_play_opening() {
+            self.opening = OpeningType::None;
             self.try_gather_group();
             self.try_build_house();
             self.try_build_ranged_base();
@@ -153,6 +167,14 @@ impl Bot {
     }
 
     fn try_play_opening(&mut self) -> bool {
+        match self.opening {
+            OpeningType::Round1 => self.try_play_opening_for_round1(),
+            OpeningType::Round2 => self.try_play_opening_for_round2(),
+            _ => true,
+        }
+    }
+
+    fn try_play_opening_for_round1(&mut self) -> bool {
         if self.world.current_tick() == 0 {
             let mut need = HashMap::new();
             let melee_units = self.world.get_my_entity_count_of(&EntityType::MeleeUnit);
@@ -166,6 +188,9 @@ impl Bot {
             if !need.is_empty() {
                 self.gather_group(need);
             }
+            self.tasks.push_back(Task::build_units(EntityType::BuilderUnit, (self.world.population_provide() - self.world.population_use()) as usize));
+            self.tasks.push_back(Task::RepairBuildings);
+            self.tasks.push_back(Task::HarvestResources);
         }
         if self.world.get_my_entity_count_of(&EntityType::RangedBase) == 0
             || self.world.get_my_units_count() >= 15
@@ -177,10 +202,45 @@ impl Bot {
         if self.world.my_resource() >= self.world.get_entity_cost(&EntityType::House) {
             self.tasks.push_back(Task::build_building(EntityType::House));
         }
+        false
+    }
+
+    fn try_play_opening_for_round2(&mut self) -> bool {
         if self.world.current_tick() == 0 {
-            self.tasks.push_back(Task::build_units(EntityType::BuilderUnit, (self.world.population_provide() - self.world.population_use()) as usize));
+            {
+                let shift_x = if self.world.grow_direction().x() > 0 {
+                    0
+                } else {
+                    -self.world.get_entity_properties(&EntityType::House).size
+                };
+                let shift_y = if self.world.grow_direction().y() > 0 {
+                    0
+                } else {
+                    -self.world.get_entity_properties(&EntityType::House).size
+                };
+                self.tasks.push_back(Task::clear_area(
+                    self.world.start_position() + Vec2i::new(shift_x, shift_y),
+                    self.world.get_entity_properties(&EntityType::House).size,
+                ));
+            }
+            self.tasks.push_back(Task::build_units(EntityType::BuilderUnit, 15));
             self.tasks.push_back(Task::RepairBuildings);
             self.tasks.push_back(Task::HarvestResources);
+        }
+        if self.world.current_tick() > 100 || self.world.population_provide() > 15
+            || self.world.get_my_entity_count_of(&EntityType::RangedBase) >= 1 {
+            self.tasks.push_back(Task::BuildBuilders);
+            return true;
+        }
+        if self.tasks.stats().build_ranged_base == 0
+            && self.world.get_my_entity_count_of(&EntityType::BuilderUnit) >= 10
+            && self.world.my_resource() >= self.world.get_entity_cost(&EntityType::RangedBase) {
+            self.tasks.push_back(Task::build_building(EntityType::RangedBase));
+        }
+        if self.tasks.stats().build_house < 2
+            && self.world.population_provide() == self.world.population_use()
+            && self.world.my_resource() >= self.world.get_entity_cost(&EntityType::House) {
+            self.tasks.push_back(Task::build_building(EntityType::House));
         }
         false
     }

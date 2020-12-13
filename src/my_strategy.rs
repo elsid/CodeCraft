@@ -130,7 +130,7 @@ impl MyStrategy {
             let config = get_config();
             #[cfg(feature = "print_config")]
             println!("{}", serde_json::to_string(&config).unwrap());
-            self.bot = Some(Bot::new(World::new(&player_view), config));
+            self.bot = Some(Bot::new(player_view, config));
         }
         self.bot.as_mut()
             .map(|v| v.get_action(player_view))

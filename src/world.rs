@@ -33,6 +33,7 @@ pub struct World {
     population_use: i32,
     population_provide: i32,
     start_position: Vec2i,
+    grow_direction: Vec2i,
     base_size: RefCell<Option<i32>>,
     requested_resource: RefCell<i32>,
     allocated_resource: RefCell<i32>,
@@ -62,6 +63,19 @@ impl World {
         for (entity_type, v) in player_view.entity_properties.iter() {
             entity_properties[entity_type.clone() as usize] = v.clone();
         }
+        let first_builder_position = player_view.entities.iter()
+            .find(|v| v.player_id == Some(player_view.my_id) && matches!(v.entity_type, EntityType::BuilderUnit)).unwrap()
+            .position();
+        let (start_position_x, grow_direction_x) = if first_builder_position.x() < player_view.map_size / 2 {
+            (0, 1)
+        } else {
+            (player_view.map_size - 1, -1)
+        };
+        let (start_position_y, grow_direction_y) = if first_builder_position.y() < player_view.map_size / 2 {
+            (0, 1)
+        } else {
+            (player_view.map_size - 1, -1)
+        };
         Self {
             my_id: player_view.my_id,
             map_size: player_view.map_size,
@@ -79,9 +93,8 @@ impl World {
             map: RefCell::new(Map::new(player_view)),
             population_use: 0,
             population_provide: 0,
-            start_position: player_view.entities.iter()
-                .find(|v| v.player_id == Some(player_view.my_id) && matches!(v.entity_type, EntityType::BuilderUnit)).unwrap()
-                .position(),
+            start_position: Vec2i::new(start_position_x, start_position_y),
+            grow_direction: Vec2i::new(grow_direction_x, grow_direction_y),
             base_size: RefCell::new(None),
             requested_resource: RefCell::new(0),
             allocated_resource: RefCell::new(0),
@@ -229,6 +242,10 @@ impl World {
         self.start_position
     }
 
+    pub fn grow_direction(&self) -> Vec2i {
+        self.grow_direction
+    }
+
     pub fn get_entity(&self, entity_id: i32) -> &Entity {
         &self.entities[self.entities_by_id[&entity_id]]
     }
@@ -287,6 +304,11 @@ impl World {
     pub fn my_bases(&self) -> impl Iterator<Item=&Entity> {
         self.my_entities()
             .filter(|v| is_entity_base(v))
+    }
+
+    pub fn my_builder_bases(&self) -> impl Iterator<Item=&Entity> {
+        self.my_entities()
+            .filter(|v| matches!(v.entity_type, EntityType::BuilderBase))
     }
 
     pub fn my_melee_bases(&self) -> impl Iterator<Item=&Entity> {
