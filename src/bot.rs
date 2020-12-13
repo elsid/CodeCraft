@@ -223,11 +223,9 @@ impl Bot {
             if group.is_empty() {
                 continue;
             }
-            let defend = group.units_count() < group.need_count() ||
-                self.world.get_my_entity_count_of(&EntityType::MeleeUnit) + self.world.get_my_entity_count_of(&EntityType::RangedUnit) < 15;
             let position = group.position();
             let world = &self.world;
-            if defend {
+            if self.world.get_my_entity_count_of(&EntityType::MeleeUnit) + self.world.get_my_entity_count_of(&EntityType::RangedUnit) < 15 {
                 if let Some(target) = self.world.opponent_entities()
                     .filter(|v| {
                         world.is_inside_protected_perimeter(v.center(world.get_entity_properties(&v.entity_type).size))
