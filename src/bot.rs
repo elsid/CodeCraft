@@ -283,7 +283,7 @@ impl Bot {
 
     fn try_build_ranged_base(&mut self) {
         if self.tasks.stats().build_ranged_base == 0
-            && (self.world.get_my_entity_count_of(&EntityType::RangedBase) as i32) < self.world.my_resource() / self.world.get_entity_cost(&EntityType::RangedBase) / 3
+            && self.world.get_my_entity_count_of(&EntityType::RangedBase) == 0
             && self.world.get_my_entity_count_of(&EntityType::BuilderUnit) > 0
             && self.world.my_resource() >= self.world.get_entity_cost(&EntityType::RangedBase) {
             self.tasks.push_front(Task::build_building(EntityType::RangedBase));
