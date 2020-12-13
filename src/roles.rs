@@ -33,6 +33,9 @@ pub enum Role {
     GroupSupplier {
         group_id: u32,
     },
+    Cleaner {
+        resource_id: i32,
+    },
 }
 
 impl Role {
@@ -45,6 +48,7 @@ impl Role {
             Role::GroupMember { group_id } => assist_group(entity, world, groups.iter().find(|v| v.id() == *group_id).unwrap(), entity_targets, entity_planners),
             Role::GroupSupplier { .. } => build_unit(entity, world),
             Role::None => get_default_action(entity, world),
+            Role::Cleaner { resource_id } => harvest_resource(entity, world, *resource_id),
         }
     }
 

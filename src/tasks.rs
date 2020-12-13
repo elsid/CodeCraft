@@ -118,6 +118,7 @@ pub enum Task {
     BuildBuilding(BuildBuildingTask),
     GatherGroup(GatherGroupTask),
     BuildUnits(BuildUnitsTask),
+    ClearArea(ClearAreaTask),
 }
 
 impl Task {
@@ -133,6 +134,10 @@ impl Task {
         Self::BuildUnits(BuildUnitsTask::new(entity_type, count))
     }
 
+    pub fn clear_area(position: Vec2i, size: i32) -> Self {
+        Self::ClearArea(ClearAreaTask::new(position, size))
+    }
+
     pub fn update(&mut self, world: &World, roles: &mut HashMap<i32, Role>, groups: &mut Vec<Group>) -> TaskStatus {
         match self {
             Self::HarvestResources => harvest_resources(world, roles),
@@ -141,6 +146,7 @@ impl Task {
             Self::BuildBuilding(task) => task.update(world, roles),
             Self::GatherGroup(task) => task.update(world, roles, groups),
             Self::BuildUnits(task) => task.update(world, roles),
+            Self::ClearArea(task) => task.update(world, roles),
         }
     }
 }
@@ -525,5 +531,70 @@ impl BuildUnitsTask {
         } else {
             TaskStatus::Wait
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct ClearAreaTask {
+    position: Vec2i,
+    size: i32,
+    builder_ids: Vec<i32>,
+}
+
+impl ClearAreaTask {
+    pub fn new(position: Vec2i, size: i32) -> Self {
+        Self { position, size, builder_ids: Vec::new() }
+    }
+
+    pub fn update(&mut self, world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus {
+        self.builder_ids.retain(|builder_id| world.contains_entity(*builder_id));
+        let mut resources = Vec::new();
+        world.visit_map_square(self.position, self.size, |_, tile, _| {
+            if let Tile::Entity(entity_id) = tile {
+                let entity = world.get_entity(entity_id);
+                if matches!(entity.entity_type, EntityType::Resource) {
+                    resources.push((entity_id, entity.position()));
+                }
+            }
+        });
+        if resources.is_empty() {
+            for builder_id in self.builder_ids.iter() {
+                roles.insert(*builder_id, Role::None);
+            }
+            return TaskStatus::Done;
+        }
+        for builder_id in self.builder_ids.iter() {
+            if let Role::Cleaner { resource_id } = &roles[builder_id] {
+                if !world.contains_entity(*resource_id) {
+                    roles.insert(*builder_id, Role::None);
+                }
+            }
+        }
+        self.builder_ids.retain(|builder_id| matches!(roles[&builder_id], Role::Cleaner { .. }));
+        let need = (world.get_my_entity_count_of(&EntityType::BuilderUnit) / 3).min(self.size as usize);
+        while self.builder_ids.len() > need {
+            if let Some(builder_id) = self.builder_ids.pop() {
+                roles.insert(builder_id, Role::None);
+            }
+        }
+        if self.builder_ids.len() >= need {
+            return TaskStatus::Wait;
+        }
+        for (resource_id, resource_position) in resources.iter() {
+            let builder = world.my_builder_units()
+                .filter(|builder| match roles[&builder.id] {
+                    Role::None | Role::Harvester { .. } => true,
+                    _ => false,
+                })
+                .min_by_key(|builder| builder.position().distance(*resource_position));
+            if let Some(builder) = builder {
+                roles.insert(builder.id, Role::Cleaner { resource_id: *resource_id });
+                self.builder_ids.push(builder.id);
+                if self.builder_ids.len() >= need {
+                    break;
+                }
+            }
+        }
+        TaskStatus::Wait
     }
 }
