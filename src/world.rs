@@ -348,6 +348,7 @@ impl World {
             let has_space_around = map.find_on_square_border(position - Vec2i::both(1), size + 2, |_, tile, locked| {
                 locked || (!house && !matches!(tile, Tile::Empty))
                     || (house && !matches!(tile, Tile::Empty) && !matches!(tile, Tile::Outside))
+                    || matches!(self.get_tile_entity_type(tile), Some(EntityType::Resource))
             }).is_none();
             has_place_for_entity && has_space_around
         };
@@ -584,6 +585,13 @@ impl World {
 
     pub fn find_in_map_range<F: FnMut(Vec2i, Tile, bool) -> bool>(&self, position: Vec2i, size: i32, range: i32, f: F) -> Option<Vec2i> {
         self.map.borrow().find_in_range(position, size, range, f)
+    }
+
+    pub fn get_tile_entity_type(&self, tile: Tile) -> Option<EntityType> {
+        if let Tile::Entity(entity_id) = tile {
+            return Some(self.get_entity(entity_id).entity_type.clone());
+        }
+        None
     }
 }
 
