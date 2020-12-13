@@ -209,7 +209,6 @@ impl<'a> Debug<'a> {
     }
 }
 
-#[cfg(feature = "enable_debug")]
 pub fn get_player_color(alpha: f32, player_id: i32) -> Color {
     match player_id {
         1 => Color { a: alpha, r: 0.0, g: 0.0, b: 1.0 },
@@ -217,5 +216,83 @@ pub fn get_player_color(alpha: f32, player_id: i32) -> Color {
         3 => Color { a: alpha, r: 1.0, g: 0.0, b: 0.0 },
         4 => Color { a: alpha, r: 1.0, g: 1.0, b: 0.0 },
         _ => Color { a: alpha, r: 0.0, g: 0.0, b: 0.0 },
+    }
+}
+
+pub fn color_from_heat(alpha: f32, mut value: f32) -> Color {
+    value = value.max(0.0).min(1.0);
+    if value < 0.25 {
+        Color { a: alpha, r: 0.0, g: 4.0 * value, b: 1.0 }
+    } else if value < 0.5 {
+        Color { a: alpha, r: 0.0, g: 1.0, b: 1.0 - 4.0 * (value - 0.5) }
+    } else if value < 0.75 {
+        Color { a: alpha, r: 4.0 * (value - 0.5), g: 1.0, b: 0.0 }
+    } else {
+        Color { a: alpha, r: 1.0, g: 1.0 - 4.0 * (value - 0.75), b: 0.0 }
+    }
+}
+
+#[derive(Default)]
+pub struct Control {
+    pub show_field: bool,
+    pub show_group_field: bool,
+    pub show_group_planner: bool,
+    pub selected_group: usize,
+    keyboard: Keyboard,
+}
+
+impl Control {
+    pub fn update(&mut self, state: &DebugState) {
+        self.keyboard.update(&state.pressed_keys);
+        if self.keyboard.pressed_keys == &["LCtrl"] {
+            if self.keyboard.pushed_keys == &["Q"] {
+                self.show_field = !self.show_field;
+                if self.show_field {
+                    self.show_group_field = false;
+                    self.show_group_planner = false;
+                }
+            } else if self.keyboard.pushed_keys == &["W"] {
+                self.show_group_field = !self.show_group_field;
+                if self.show_group_field {
+                    self.show_field = false;
+                    self.show_group_planner = false;
+                }
+            } else if self.keyboard.pushed_keys == &["R"] {
+                self.show_group_planner = !self.show_group_planner;
+                if self.show_group_planner {
+                    self.show_field = false;
+                    self.show_group_field = false;
+                }
+            }
+        } else if self.keyboard.pressed_keys == &["LShift"] {
+            if self.keyboard.pushed_keys == &["A"] {
+                self.selected_group -= 1;
+            } else if self.keyboard.pushed_keys == &["D"] {
+                self.selected_group += 1;
+            }
+        }
+    }
+}
+
+#[derive(Default)]
+struct Keyboard {
+    pressed_keys: Vec<String>,
+    pushed_keys: Vec<String>,
+}
+
+impl Keyboard {
+    fn update(&mut self, pressed_keys: &Vec<String>) {
+        self.pushed_keys.clear();
+        for old_key in self.pressed_keys.iter() {
+            if !pressed_keys.contains(old_key) {
+                self.pushed_keys.push(old_key.clone());
+            }
+        }
+        self.pressed_keys.retain(|key| pressed_keys.contains(key));
+        for new_key in pressed_keys.iter() {
+            if !self.pressed_keys.contains(new_key) {
+                self.pressed_keys.push(new_key.clone());
+            }
+        }
     }
 }

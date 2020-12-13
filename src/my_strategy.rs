@@ -13,6 +13,12 @@ pub use entity_simulator::*;
 #[allow(unused_imports)]
 pub use entity_type::*;
 #[allow(unused_imports)]
+pub use field::*;
+#[allow(unused_imports)]
+pub use group_field::*;
+#[allow(unused_imports)]
+pub use group_planner::*;
+#[allow(unused_imports)]
 pub use groups::*;
 #[allow(unused_imports)]
 pub use map::*;
@@ -36,6 +42,15 @@ pub use vec2::*;
 pub use world::*;
 
 use super::DebugInterface;
+
+#[path = "group_planner.rs"]
+pub mod group_planner;
+
+#[path = "group_field.rs"]
+pub mod group_field;
+
+#[path = "field.rs"]
+pub mod field;
 
 #[path = "range.rs"]
 pub mod range;

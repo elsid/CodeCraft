@@ -17,8 +17,9 @@ pub struct Group {
     target: Option<Vec2i>,
     has: HashMap<EntityType, usize>,
     need: HashMap<EntityType, usize>,
-    units: HashMap<i32, EntityType>,
+    units: Vec<(i32, EntityType)>,
     position: Vec2i,
+    sight_range: i32,
 }
 
 impl Group {
@@ -29,8 +30,9 @@ impl Group {
             target: None,
             has: need.keys().cloned().map(|v| (v, 0)).collect(),
             need,
-            units: HashMap::new(),
+            units: Vec::new(),
             position: Vec2i::zero(),
+            sight_range: 0,
         }
     }
 
@@ -46,8 +48,15 @@ impl Group {
         self.position
     }
 
+    pub fn sight_range(&self) -> i32 {
+        self.sight_range
+    }
+
     pub fn update(&mut self, world: &World) {
-        let absent: Vec<i32> = self.units.keys().cloned().filter(|v| !world.contains_entity(*v)).collect();
+        let absent: Vec<i32> = self.units.iter()
+            .filter(|(entity_id, _)| !world.contains_entity(*entity_id))
+            .map(|(entity_id, _)| *entity_id)
+            .collect();
         for unit_id in absent.iter() {
             self.remove_unit(*unit_id);
         }
@@ -59,25 +68,27 @@ impl Group {
         if self.units.is_empty() {
             self.position = Vec2i::zero();
         } else {
-            let mean_position = self.units.keys()
-                .map(|v| world.get_entity(*v).position())
-                .fold(Vec2i::zero(), |r, v| r + v) / self.units.len() as i32;
-            self.position = self.units.keys()
-                .map(|v| (world.get_entity(*v).position(), *v))
-                .min_by_key(|(position, entity_id)| (position.distance(mean_position), *entity_id))
-                .unwrap().0;
+            self.position =  world.get_entity(self.units[0].0).position();
         }
+        let mut sight_range = 0;
+        for (has, count) in self.has.iter() {
+            if *count > 0 {
+                sight_range = world.get_entity_properties(has).sight_range.max(sight_range);
+            }
+        }
+        self.sight_range = sight_range;
     }
 
     pub fn add_unit(&mut self, unit_id: i32, entity_type: EntityType) {
         *self.has.get_mut(&entity_type).unwrap() += 1;
-        self.units.insert(unit_id, entity_type);
+        self.units.push((unit_id, entity_type));
     }
 
     pub fn remove_unit(&mut self, unit_id: i32) {
-        if let Some(entity_type) = self.units.remove(&unit_id) {
+        if let Some((_, entity_type)) = self.units.iter().find(|(entity_id, _)| *entity_id == unit_id) {
             *self.has.get_mut(&entity_type).unwrap() -= 1;
         }
+        self.units.retain(|(entity_id, _)| *entity_id != unit_id);
     }
 
     pub fn clear(&mut self) {
@@ -115,8 +126,8 @@ impl Group {
         self.state
     }
 
-    pub fn units(&self) -> impl Iterator<Item=&i32> {
-        self.units.keys()
+    pub fn units(&self) -> &Vec<(i32, EntityType)> {
+        &self.units
     }
 
     pub fn units_count(&self) -> usize {
@@ -129,7 +140,8 @@ impl Group {
 
     #[cfg(feature = "enable_debug")]
     pub fn get_bounds_min(&self, world: &World) -> Vec2i {
-        self.units.keys()
+        self.units.iter()
+            .map(|(unit_id, _)| unit_id)
             .fold(
                 Vec2i::both(world.map_size()),
                 |r, v| r.lowest(world.get_entity(*v).position()),
@@ -138,7 +150,8 @@ impl Group {
 
     #[cfg(feature = "enable_debug")]
     pub fn get_bounds_max(&self, world: &World) -> Vec2i {
-        self.units.keys()
+        self.units.iter()
+            .map(|(unit_id, _)| unit_id)
             .fold(
                 Vec2i::zero(),
                 |r, v| {

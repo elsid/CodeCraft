@@ -175,8 +175,8 @@ impl EntityPlanner {
             }
         }
         debug.add_static_text(format!(
-            "Entity planner: states={} transitions={} score={} start={:?} plan={:?}",
-            self.states.len(), self.transitions.len(), self.plan.score, entity.position, self.plan.transitions
+            "Entity planner: entity_id={} states={} transitions={} start={:?} plan={:?}",
+            self.entity_id, self.states.len(), self.transitions.len(), entity.position, self.plan
         ));
     }
 

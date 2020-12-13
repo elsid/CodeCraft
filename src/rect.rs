@@ -82,6 +82,13 @@ impl Rect {
             && self.min.y() < other.max.y()
             && self.max.y() > other.min.y()
     }
+
+    pub fn clip(&self, position: Vec2i) -> Vec2i {
+        Vec2i::new(
+            position.x().min(self.max.x() - 1).max(self.min.x()),
+            position.y().min(self.max.y() - 1).max(self.min.y()),
+        )
+    }
 }
 
 #[cfg(test)]

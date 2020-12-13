@@ -1,6 +1,7 @@
 use my_strategy::MyStrategy;
 
 mod my_strategy;
+mod range;
 
 struct Args {
     host: String,

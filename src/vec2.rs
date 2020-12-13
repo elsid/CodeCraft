@@ -1,4 +1,4 @@
-use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, Mul, Neg, Rem, Sub, SubAssign};
 
 use model::{Vec2F32, Vec2I32};
 
@@ -367,5 +367,14 @@ impl SubAssign for Vec2i {
             x: self.x - other.x,
             y: self.y - other.y,
         };
+    }
+}
+
+impl Rem<i32> for Vec2i {
+    type Output = Self;
+
+    #[inline(always)]
+    fn rem(self, rhs: i32) -> Self::Output {
+        Vec2i::new(self.x % rhs, self.y % rhs)
     }
 }

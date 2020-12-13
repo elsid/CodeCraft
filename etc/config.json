@@ -5,5 +5,21 @@
   "entity_plan_max_cost_per_tick": 100000,
   "entity_plan_max_total_cost": 10000000,
   "min_player_inactive_ticks": 5,
-  "engage_distance": 1
+  "engage_distance": 1,
+  "segment_size": 5,
+  "resource_weight": -1.0,
+  "opponent_dynamic_sight_range_power_weight": -1.0,
+  "opponent_static_sight_range_power_weight": -1.0,
+  "opponent_dynamic_attack_range_power_weight": -1.0,
+  "opponent_static_attack_range_power_weight": -1.0,
+  "opponent_dynamic_military_destroy_score_weight": 1.0,
+  "opponent_dynamic_economy_destroy_score_weight": 1.0,
+  "opponent_static_destroy_score_weight": 1.0,
+  "opponent_dynamic_sight_score_weight": -1.0,
+  "opponent_static_sight_score_weight": -1.0,
+  "my_static_sight_range_power_weight": 1.0,
+  "my_static_attack_range_power_weight": 1.0,
+  "my_dynamic_economy_destroy_score_weight": 1.0,
+  "my_static_destroy_score_weight": 1.0,
+  "group_distance_to_position_cost": 0.001
 }

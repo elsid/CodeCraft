@@ -17,7 +17,7 @@ use rand::rngs::StdRng;
 
 #[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
-use crate::my_strategy::{build_builders, Config, EntityPlan, EntityPlanner, EntitySimulator, Group, GroupState, harvest_resources, is_active_entity_type, is_protected_entity_type, Positionable, Range, Rect, repair_buildings, Role, Stats, Task, TaskManager, Tile, Vec2i, World};
+use crate::my_strategy::{build_builders, Config, EntityPlan, EntityPlanner, EntitySimulator, Field, Group, GroupField, GroupPlanner, GroupState, harvest_resources, is_active_entity_type, Positionable, Range, Rect, repair_buildings, Role, Stats, Task, TaskManager, Tile, Vec2i, World};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
@@ -44,6 +44,11 @@ pub struct Bot {
     entity_targets: HashMap<i32, Vec2i>,
     entity_planners: HashMap<i32, EntityPlanner>,
     rng: RefCell<StdRng>,
+    field: Field,
+    group_fields: Vec<GroupField>,
+    group_planners: Vec<GroupPlanner>,
+    #[cfg(feature = "enable_debug")]
+    control: RefCell<debug::Control>,
 }
 
 impl Drop for Bot {
@@ -89,7 +94,12 @@ impl Bot {
             entity_planners: HashMap::new(),
             rng: RefCell::new(StdRng::seed_from_u64(seed)),
             world: World::new(player_view, config.clone()),
+            field: Field::new(player_view.map_size, config.clone()),
+            group_fields: Vec::new(),
+            group_planners: Vec::new(),
             config,
+            #[cfg(feature = "enable_debug")]
+            control: RefCell::new(debug::Control::default()),
         }
     }
 
@@ -109,8 +119,12 @@ impl Bot {
         if self.world.current_tick() == 0 {
             debug_interface.send(model::DebugCommand::SetAutoFlush { enable: false });
         }
+        self.control.borrow_mut().update(state);
         let mut debug = debug::Debug::new(state);
         self.world.debug_update(&mut debug);
+        if self.control.borrow().show_field {
+            self.field.debug_update(&mut debug);
+        }
         debug.add_static_text(format!("Opening: {:?}", self.opening));
         self.debug_update_groups(&mut debug);
         self.debug_update_entities(&mut debug);
@@ -118,6 +132,25 @@ impl Bot {
         for entity_planner in self.entity_planners.values() {
             entity_planner.debug_update(self.world.entity_properties(), &mut debug);
         }
+        if !self.groups.is_empty() {
+            let selected_group = self.control.borrow().selected_group.min(self.groups.len() - 1) % self.groups.len();
+            if self.control.borrow().show_group_field {
+                self.group_fields[selected_group].debug_update(&mut debug);
+            }
+            if self.control.borrow().show_group_planner {
+                self.group_planners[selected_group].debug_update(&mut debug);
+            }
+        }
+        if self.control.borrow().show_field {
+            debug.add_static_text(format!("Control: show_field"));
+        }
+        if self.control.borrow().show_group_field {
+            debug.add_static_text(format!("Control: show_group_field"));
+        }
+        if self.control.borrow().show_group_planner {
+            debug.add_static_text(format!("Control: show_group_planner"));
+        }
+        debug.add_static_text(format!("Control: selected group: {:?}", self.control.borrow().selected_group));
         self.tasks.debug_update(&mut debug);
         debug.send(debug_interface);
     }
@@ -128,9 +161,12 @@ impl Bot {
         } else {
             self.world.update(player_view, &mut *self.stats.borrow_mut());
         }
+        self.field.update(&self.world);
         self.update_roles();
         self.update_groups();
         self.update_tasks();
+        self.update_group_fields();
+        self.update_group_plans();
         self.update_group_targets();
         self.update_entity_plans();
         self.update_entity_targets();
@@ -179,6 +215,32 @@ impl Bot {
         repair_buildings(&self.world, &mut self.roles);
         if matches!(self.opening, OpeningType::None) {
             build_builders(&self.world, &mut self.roles);
+        }
+    }
+
+    fn update_group_fields(&mut self) {
+        let groups = &self.groups;
+        self.group_fields.retain(|group_field| {
+            groups.iter().any(|group| group.id() == group_field.group_id())
+        });
+        for i in 0..self.groups.len() {
+            self.group_fields[i].update(&self.field, &self.groups);
+        }
+    }
+
+    fn update_group_plans(&mut self) {
+        let groups = &self.groups;
+        self.group_planners.retain(|group_planner| {
+            groups.iter().any(|group| group.id() == group_planner.group_id())
+        });
+        for i in 0..self.groups.len() {
+            let group_field = &self.group_fields[i];
+            let range = if self.world.get_my_entity_count_of(&EntityType::MeleeUnit) + self.world.get_my_entity_count_of(&EntityType::RangedUnit) < 15 {
+                Range::new(self.world.start_position() / self.config.segment_size, self.world.protected_radius() / self.config.segment_size)
+            } else {
+                Range::new(self.world.start_position() / self.config.segment_size, 2 * self.world.map_size() / self.config.segment_size)
+            };
+            self.group_planners[i].update(&self.groups, group_field, &range);
         }
     }
 
@@ -300,6 +362,8 @@ impl Bot {
         let mut group = Group::new(group_id, need);
         group.update(&self.world);
         self.groups.push(group);
+        self.group_fields.push(GroupField::new(group_id, self.world.map_size(), self.config.clone()));
+        self.group_planners.push(GroupPlanner::new(group_id, self.config.clone()));
         group_id
     }
 
@@ -334,44 +398,13 @@ impl Bot {
             if self.groups[i].is_empty() {
                 continue;
             }
-            let target = self.get_group_target(&self.groups[i]);
-            self.groups[i].set_target(Some(target));
-        }
-    }
-
-    fn get_group_target(&self, group: &Group) -> Vec2i {
-        let position = group.position();
-        let world = &self.world;
-        if self.world.get_my_entity_count_of(&EntityType::MeleeUnit) + self.world.get_my_entity_count_of(&EntityType::RangedUnit) < 15 {
-            if let Some(target) = self.world.opponent_entities()
-                .filter(|v| {
-                    world.is_inside_protected_perimeter(v.center(world.get_entity_properties(&v.entity_type).size))
-                })
-                .min_by_key(|entity| {
-                    let properties = world.get_entity_properties(&entity.entity_type);
-                    let entity_center = entity.center(properties.size);
-                    let distance_to_my_entity = world.my_entities()
-                        .filter(|v| is_protected_entity_type(&v.entity_type))
-                        .map(|v| v.center(world.get_entity_properties(&v.entity_type).size).distance(entity_center))
-                        .min();
-                    (distance_to_my_entity, entity_center.distance(position), entity.id)
-                }) {
-                target.position()
+            let plan = self.group_planners[i].plan();
+            if plan.transitions.len() > 1 {
+                self.groups[i].set_target(Some(Vec2i::from(plan.transitions[1])));
+            } else if plan.transitions.len() > 0 {
+                self.groups[i].set_target(Some(Vec2i::from(plan.transitions[0])));
             } else {
-                self.world.start_position() + self.world.grow_direction() * self.world.protected_radius() / 2
-            }
-        } else {
-            if let Some(target) = self.world.opponent_entities()
-                .min_by_key(|v| (v.center(world.get_entity_properties(&v.entity_type).size).distance(position), v.id)) {
-                target.position()
-            } else if self.world.fog_of_war() {
-                self.world.players().iter()
-                    .filter(|player| player.id != self.world.my_id() && self.world.is_player_alive(player.id))
-                    .min_by_key(|player| (self.world.get_player_position(player.id).distance(group.position()) + player.score))
-                    .map(|player| self.world.get_player_position(player.id))
-                    .unwrap_or(position)
-            } else {
-                position
+                self.groups[i].set_target(None);
             }
         }
     }
@@ -652,7 +685,8 @@ impl Bot {
 
     #[cfg(feature = "enable_debug")]
     fn debug_update_groups(&self, debug: &mut debug::Debug) {
-        for group in self.groups.iter() {
+        for i in 0..self.groups.len() {
+            let group = &self.groups[i];
             if group.is_empty() {
                 continue;
             }
@@ -680,8 +714,8 @@ impl Bot {
         for i in 0..self.groups.len() {
             let group = &self.groups[i];
             debug.add_static_text(format!(
-                "{}) has={:?} position={:?} target={:?} state={:?}",
-                group.id(), group.has(), group.position(), group.target(), group.state()
+                "{}) has={:?} position={:?} target={:?} state={:?} plan={:?}",
+                group.id(), group.has(), group.position(), group.target(), group.state(), self.group_planners[i].plan()
             ));
         }
     }
