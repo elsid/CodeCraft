@@ -13,7 +13,7 @@ use model::{
 #[cfg(feature = "enable_debug")]
 use model::Color;
 
-use crate::my_strategy::{is_entity_base, is_entity_unit, Map, Positionable, Rect, Tile, Vec2i, visit_range, position_to_index};
+use crate::my_strategy::{is_entity_base, is_entity_unit, Map, position_to_index, Positionable, Rect, Tile, Vec2i, visit_range};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{debug, Vec2f};
 

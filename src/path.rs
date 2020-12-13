@@ -1,6 +1,5 @@
 #[cfg(feature = "enable_debug")]
 use model::Color;
-use model::EntityType;
 
 use crate::my_strategy::{index_to_position, position_to_index, Rect, Vec2i};
 #[cfg(feature = "enable_debug")]
@@ -69,23 +68,21 @@ impl Path {
     }
 
     pub fn find_reversed_shortest_path(&self, dst: Vec2i) -> Vec<Vec2i> {
-        let src = self.start.unwrap();
-        let src_index = position_to_index(src, self.map_size);
-        let mut result = Vec::new();
-        result.reserve(2 * self.map_size);
-        let mut index = position_to_index(dst, self.map_size);
-        loop {
-            let prev = self.backtrack[index];
-            if prev == index {
-                return Vec::new();
-            }
-            result.push(index_to_position(index, self.map_size));
-            if prev == src_index {
-                break;
-            }
-            index = prev;
+        let mut path = Vec::new();
+        path.reserve(2 * self.map_size);
+        let success = visit_reversed_shortest_path(
+            position_to_index(self.start.unwrap(), self.map_size),
+            position_to_index(dst, self.map_size),
+            &self.backtrack,
+            |index| {
+                path.push(index_to_position(index, self.map_size));
+            },
+        );
+        if success {
+            path
+        } else {
+            Vec::new()
         }
-        result
     }
 
     pub fn update<M: PathMap>(&mut self, start: Vec2i, map: &M) {
@@ -155,6 +152,22 @@ impl Path {
             }
         }
     }
+}
+
+pub fn visit_reversed_shortest_path<F: FnMut(usize)>(src: usize, dst: usize, backtrack: &Vec<usize>, mut visit: F) -> bool {
+    let mut index = dst;
+    loop {
+        let prev = backtrack[index];
+        if prev == index {
+            return false;
+        }
+        visit(index);
+        if prev == src {
+            break;
+        }
+        index = prev;
+    }
+    true
 }
 
 #[cfg(test)]

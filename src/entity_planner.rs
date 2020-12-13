@@ -6,7 +6,7 @@ use model::Color;
 use rand::Rng;
 use rand::seq::SliceRandom;
 
-use crate::my_strategy::{EntitySimulator, Path, position_to_index, SimulatedEntity, SimulatedEntityAction, SimulatedEntityActionType, Vec2i, visit_range};
+use crate::my_strategy::{EntitySimulator, position_to_index, SimulatedEntity, SimulatedEntityAction, SimulatedEntityActionType, Vec2i, visit_range};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
@@ -87,8 +87,6 @@ impl EntityPlanner {
         let mut optimal_final_state_index = None;
         let mut iteration = 0;
 
-        let mut paths = Vec::new();
-
         while let Some((score, state_index)) = frontier.pop() {
             iteration += 1;
             let depth = self.states[state_index].depth;
@@ -116,7 +114,7 @@ impl EntityPlanner {
             self.add_move_entity_actions(&entity, map_size, &mut actions);
             actions.shuffle(rng);
             for action_type in actions.into_iter() {
-                frontier.push(self.add_transition(action_type, &other_actions, state_index, entity_properties, &mut paths, rng));
+                frontier.push(self.add_transition(action_type, &other_actions, state_index, entity_properties, rng));
             }
         }
 
@@ -251,8 +249,7 @@ impl EntityPlanner {
     }
 
     fn add_transition<R: Rng>(&mut self, action_type: SimulatedEntityActionType, other_actions: &Vec<SimulatedEntityAction>,
-                              state_index: usize, entity_properties: &Vec<EntityProperties>,
-                              paths: &mut Vec<Path>, rng: &mut R) -> (i32, usize) {
+                              state_index: usize, entity_properties: &Vec<EntityProperties>, rng: &mut R) -> (i32, usize) {
         let transition_index = self.transitions.len();
         self.transitions.push(Transition { state_index, action_type: action_type.clone() });
         let new_state_index = self.states.len();
@@ -267,7 +264,7 @@ impl EntityPlanner {
         for action in other_actions.iter() {
             new_state.simulator.add_action(action.clone());
         }
-        new_state.simulator.simulate(entity_properties, paths, rng);
+        new_state.simulator.simulate(entity_properties, rng);
         new_state.depth += 1;
         (
             self.get_score(&self.states[new_state_index].simulator),

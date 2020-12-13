@@ -1,9 +1,11 @@
+use std::collections::BinaryHeap;
+
 use itertools::Itertools;
 use model::{EntityProperties, EntityType};
 use rand::Rng;
 use rand::seq::SliceRandom;
 
-use crate::my_strategy::{Path, PathMap, position_to_index, Positionable, Rect, Tile, Vec2i, visit_neighbour, visit_square_with_bounds, World};
+use crate::my_strategy::{index_to_position, position_to_index, Positionable, Rect, Tile, Vec2i, visit_reversed_shortest_path, visit_square_with_bounds, World};
 
 #[derive(Clone, Debug)]
 pub struct SimulatedPlayer {
@@ -141,7 +143,7 @@ impl EntitySimulator {
         self.actions.push(action);
     }
 
-    pub fn simulate<R: Rng>(&mut self, entity_properties: &Vec<EntityProperties>, paths: &mut Vec<Path>, rng: &mut R) {
+    pub fn simulate<R: Rng>(&mut self, entity_properties: &Vec<EntityProperties>, rng: &mut R) {
         for entity in self.entities.iter_mut() {
             entity.available = true;
         }
@@ -149,7 +151,7 @@ impl EntitySimulator {
             if matches!(self.actions[action_index].action_type, SimulatedEntityActionType::AutoAttack) {
                 let entity_index = self.get_entity_index(self.actions[action_index].entity_id);
                 if self.entities[entity_index].available && self.entities[entity_index].active {
-                    self.actions[action_index].action_type = self.get_auto_attack_action(entity_index, entity_properties, paths);
+                    self.actions[action_index].action_type = self.get_auto_attack_action(entity_index, entity_properties);
                 } else {
                     self.actions[action_index].action_type = SimulatedEntityActionType::None;
                 }
@@ -225,7 +227,7 @@ impl EntitySimulator {
     }
 
     fn move_entity(&mut self, entity_index: usize, direction: Vec2i, entity_properties: &Vec<EntityProperties>) {
-        assert!(direction.sum() <= 1, "{:?}", direction);
+        assert!(direction.abs().sum() <= 1, "{:?}", direction);
         let properties = &entity_properties[self.entities[entity_index].entity_type.clone() as usize];
         if !properties.can_move {
             return;
@@ -243,7 +245,7 @@ impl EntitySimulator {
         self.entities[entity_index].position = target_position;
     }
 
-    fn get_auto_attack_action(&mut self, entity_index: usize, entity_properties: &Vec<EntityProperties>, paths: &mut Vec<Path>) -> SimulatedEntityActionType {
+    fn get_auto_attack_action(&mut self, entity_index: usize, entity_properties: &Vec<EntityProperties>) -> SimulatedEntityActionType {
         let entity = &self.entities[entity_index];
         let properties = &entity_properties[entity.entity_type.clone() as usize];
         let entity_bounds = entity.bounds(entity_properties);
@@ -264,44 +266,92 @@ impl EntitySimulator {
                 if distance <= attack.attack_range {
                     return SimulatedEntityActionType::Attack { target: target.id };
                 } else if properties.can_move {
-                    let mut path = paths.iter().find(|v| v.start() == Some(entity.position - self.shift));
-                    if path.is_none() {
-                        paths.push(Path::from_position(self.map_size, entity.position - self.shift, self));
-                        path = paths.last();
-                    }
-                    let target_properties = &entity_properties[target.entity_type.clone() as usize];
-                    let mut min_distance = std::i32::MAX;
-                    let mut target_position = None;
-                    let bounds = self.bounds();
-                    visit_neighbour(target.position, target_properties.size, |position| {
-                        if !bounds.contains(position) {
-                            return;
-                        }
-                        let distance = path.unwrap().get_distance_to(position - self.shift);
-                        if min_distance > distance {
-                            min_distance = distance;
-                            target_position = Some(position);
-                        }
-                    });
-                    if let Some(target_position) = target_position {
-                        let direction = path
-                            .and_then(|path| path.get_first_position_to(target_position - self.shift))
-                            .map(|next_position| next_position + self.shift - entity.position);
-                        if let Some(direction) = direction {
-                            assert!(direction.sum() <= 1, "{:?}", direction);
-                            return SimulatedEntityActionType::MoveEntity { direction };
-                        }
+                    if let Some(next_position) = self.find_shortest_path_next_position(entity.position, target, attack.attack_range, entity_properties) {
+                        let direction = next_position - entity.position;
+                        assert_eq!(direction.abs().sum(), 1, "{:?}", direction);
+                        return SimulatedEntityActionType::MoveEntity { direction };
                     }
                 }
             }
         }
         SimulatedEntityActionType::None
     }
-}
 
-impl PathMap for EntitySimulator {
-    fn is_passable(&self, position: Vec2i) -> bool {
-        self.tiles[position_to_index(position, self.map_size)].is_none()
+    fn find_shortest_path_next_position(&self, src: Vec2i, target: &SimulatedEntity, range: i32, entity_properties: &Vec<EntityProperties>) -> Option<Vec2i> {
+        let bounds = self.bounds();
+        let target_bounds = target.bounds(entity_properties);
+        let size = self.map_size;
+
+        let mut open: Vec<bool> = std::iter::repeat(true)
+            .take(size * size)
+            .collect();
+        let mut costs: Vec<i32> = std::iter::repeat(std::i32::MAX)
+            .take(size * size)
+            .collect();
+        let mut backtrack: Vec<usize> = (0..(size * size)).into_iter().collect();
+        let mut discovered = BinaryHeap::new();
+
+        let src_index = position_to_index(src - self.shift, size);
+
+        costs[src_index] = 0;
+        discovered.push((-target_bounds.distance_to_position(src), src_index));
+
+        const EDGES: &[Vec2i] = &[
+            Vec2i::only_x(1),
+            Vec2i::only_x(-1),
+            Vec2i::only_y(1),
+            Vec2i::only_y(-1),
+        ];
+
+        let mut nearest_position_index = None;
+        let mut min_distance = std::i32::MAX;
+
+        while let Some((_, node_index)) = discovered.pop() {
+            let node_position = index_to_position(node_index, size);
+            let distance = target_bounds.distance_to_position(node_position + self.shift);
+            if min_distance > distance {
+                min_distance = distance;
+                nearest_position_index = Some(node_index);
+                if distance <= range {
+                    break;
+                }
+            }
+            open[node_index] = true;
+            for &shift in EDGES.iter() {
+                let neighbour_position = node_position + shift;
+                if !bounds.contains(neighbour_position + self.shift) {
+                    continue;
+                }
+                let neighbour_index = position_to_index(neighbour_position, size);
+                if self.tiles[neighbour_index].is_some() {
+                    continue;
+                }
+                let new_cost = costs[node_index] + 1;
+                if costs[neighbour_index] <= new_cost {
+                    continue;
+                }
+                costs[neighbour_index] = new_cost;
+                backtrack[neighbour_index] = node_index;
+                if !open[neighbour_index] {
+                    continue;
+                }
+                open[neighbour_index] = false;
+                let new_score = new_cost + target_bounds.distance_to_position(neighbour_position + self.shift);
+                discovered.push((-new_score, neighbour_index));
+            }
+        }
+
+        if let Some(dst) = nearest_position_index {
+            let mut first_position_index = None;
+            let success = visit_reversed_shortest_path(src_index, dst, &backtrack, |index| {
+                first_position_index = Some(index);
+            });
+            if success {
+                return first_position_index.map(|v| index_to_position(v, size) + self.shift);
+            }
+        }
+
+        None
     }
 }
 
@@ -393,9 +443,8 @@ mod tests {
     fn simulate() {
         let world = new_world();
         let mut simulator = EntitySimulator::new(Vec2i::new(20, 20), 20, &world);
-        let mut paths = Vec::new();
         let mut rng = StdRng::seed_from_u64(42);
-        simulator.simulate(world.entity_properties(), &mut paths, &mut rng);
+        simulator.simulate(world.entity_properties(), &mut rng);
         assert_eq!(simulator.entities().len(), 5);
         assert_eq!(simulator.players().len(), 2);
         assert_eq!(simulator.players()[0].id, 1);
@@ -412,13 +461,12 @@ mod tests {
     fn simulate_move_entity() {
         let world = new_world();
         let mut simulator = EntitySimulator::new(Vec2i::new(20, 20), 20, &world);
-        let mut paths = Vec::new();
         let mut rng = StdRng::seed_from_u64(42);
         simulator.add_action(SimulatedEntityAction {
             entity_id: 1,
             action_type: SimulatedEntityActionType::MoveEntity { direction: Vec2i::new(1, 0) },
         });
-        simulator.simulate(world.entity_properties(), &mut paths, &mut rng);
+        simulator.simulate(world.entity_properties(), &mut rng);
         assert_eq!(simulator.entities()[0].id, 1);
         assert_eq!(simulator.entities()[0].position, Vec2i::new(21, 20));
     }
@@ -427,13 +475,12 @@ mod tests {
     fn simulate_move_entity_outside() {
         let world = new_world();
         let mut simulator = EntitySimulator::new(Vec2i::new(20, 20), 20, &world);
-        let mut paths = Vec::new();
         let mut rng = StdRng::seed_from_u64(42);
         simulator.add_action(SimulatedEntityAction {
             entity_id: 1,
             action_type: SimulatedEntityActionType::MoveEntity { direction: Vec2i::new(-1, 0) },
         });
-        simulator.simulate(world.entity_properties(), &mut paths, &mut rng);
+        simulator.simulate(world.entity_properties(), &mut rng);
         assert_eq!(simulator.entities().len(), 4);
         assert!(!simulator.entities().iter().any(|v| v.id == 1));
     }
@@ -442,7 +489,6 @@ mod tests {
     fn simulate_attack_in_range() {
         let world = new_world();
         let mut simulator = EntitySimulator::new(Vec2i::new(20, 20), 20, &world);
-        let mut paths = Vec::new();
         let mut rng = StdRng::seed_from_u64(42);
         simulator.add_action(SimulatedEntityAction {
             entity_id: 2,
@@ -450,7 +496,7 @@ mod tests {
         });
         assert_eq!(simulator.entities()[2].id, 3);
         assert_eq!(simulator.entities()[2].health, 10);
-        simulator.simulate(world.entity_properties(), &mut paths, &mut rng);
+        simulator.simulate(world.entity_properties(), &mut rng);
         assert_eq!(simulator.entities()[2].id, 3);
         assert_eq!(simulator.entities()[2].health, 5);
     }
@@ -459,7 +505,6 @@ mod tests {
     fn simulate_attack_out_of_range() {
         let world = new_world();
         let mut simulator = EntitySimulator::new(Vec2i::new(20, 20), 20, &world);
-        let mut paths = Vec::new();
         let mut rng = StdRng::seed_from_u64(42);
         simulator.add_action(SimulatedEntityAction {
             entity_id: 4,
@@ -467,7 +512,7 @@ mod tests {
         });
         assert_eq!(simulator.entities()[4].id, 5);
         assert_eq!(simulator.entities()[4].health, 50);
-        simulator.simulate(world.entity_properties(), &mut paths, &mut rng);
+        simulator.simulate(world.entity_properties(), &mut rng);
         assert_eq!(simulator.entities()[4].id, 5);
         assert_eq!(simulator.entities()[4].health, 50);
     }
@@ -476,7 +521,6 @@ mod tests {
     fn simulate_auto_attack_in_range() {
         let world = new_world();
         let mut simulator = EntitySimulator::new(Vec2i::new(20, 20), 20, &world);
-        let mut paths = Vec::new();
         let mut rng = StdRng::seed_from_u64(42);
         simulator.add_action(SimulatedEntityAction {
             entity_id: 3,
@@ -484,7 +528,7 @@ mod tests {
         });
         assert_eq!(simulator.entities()[1].id, 2);
         assert_eq!(simulator.entities()[1].health, 10);
-        simulator.simulate(world.entity_properties(), &mut paths, &mut rng);
+        simulator.simulate(world.entity_properties(), &mut rng);
         assert_eq!(simulator.entities()[1].id, 2);
         assert_eq!(simulator.entities()[1].health, 5);
     }
@@ -493,7 +537,6 @@ mod tests {
     fn simulate_auto_attack_out_of_range() {
         let world = new_world();
         let mut simulator = EntitySimulator::new(Vec2i::new(20, 20), 20, &world);
-        let mut paths = Vec::new();
         let mut rng = StdRng::seed_from_u64(42);
         simulator.add_action(SimulatedEntityAction {
             entity_id: 5,
@@ -501,7 +544,7 @@ mod tests {
         });
         assert_eq!(simulator.entities()[4].id, 5);
         assert_eq!(simulator.entities()[4].position, Vec2i::new(35, 35));
-        simulator.simulate(world.entity_properties(), &mut paths, &mut rng);
+        simulator.simulate(world.entity_properties(), &mut rng);
         assert_eq!(simulator.entities()[4].id, 5);
         assert_eq!(simulator.entities()[4].position, Vec2i::new(34, 35));
     }
@@ -510,7 +553,6 @@ mod tests {
     fn simulate_all_auto_attack() {
         let world = new_world();
         let mut simulator = EntitySimulator::new(Vec2i::new(20, 20), 20, &world);
-        let mut paths = Vec::new();
         let mut rng = StdRng::seed_from_u64(42);
         while simulator.entities().len() > 1 {
             for i in 0..simulator.entities().len() {
@@ -519,7 +561,7 @@ mod tests {
                     action_type: SimulatedEntityActionType::AutoAttack,
                 });
             }
-            simulator.simulate(world.entity_properties(), &mut paths, &mut rng);
+            simulator.simulate(world.entity_properties(), &mut rng);
         }
         assert_eq!(simulator.players()[0].id, 1);
         assert_eq!(simulator.players()[1].id, 2);
