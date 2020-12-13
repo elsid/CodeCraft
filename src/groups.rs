@@ -19,12 +19,6 @@ pub struct Group {
     need: HashMap<EntityType, usize>,
     units: HashMap<i32, EntityType>,
     position: Vec2i,
-    radius: i32,
-    attack_range: i32,
-    sight_range: i32,
-    destroy_score: i32,
-    damage: i32,
-    health: i32,
 }
 
 impl Group {
@@ -37,12 +31,6 @@ impl Group {
             need,
             units: HashMap::new(),
             position: Vec2i::zero(),
-            radius: 0,
-            attack_range: 0,
-            sight_range: 0,
-            destroy_score: 0,
-            damage: 0,
-            health: 0,
         }
     }
 
@@ -79,35 +67,6 @@ impl Group {
                 .min_by_key(|(position, entity_id)| (position.distance(mean_position), *entity_id))
                 .unwrap().0;
         }
-        self.radius = self.units.iter()
-            .map(|(v, _)| world.get_entity(*v).position().distance(self.position))
-            .max()
-            .unwrap_or(0);
-        let mut sight_range = 0;
-        let mut attack_range = 0;
-        for (has, count) in self.has.iter() {
-            if *count > 0 {
-                attack_range = world.get_entity_properties(has).attack.as_ref()
-                    .map(|v| v.attack_range.max(attack_range))
-                    .unwrap_or(attack_range);
-                sight_range = world.get_entity_properties(has).sight_range.max(sight_range);
-            }
-        }
-        self.sight_range = sight_range;
-        self.attack_range = attack_range;
-        self.destroy_score = self.units.values()
-            .map(|v| world.get_entity_properties(v).destroy_score)
-            .sum();
-        self.health = self.units.keys()
-            .map(|v| world.get_entity(*v).health)
-            .sum();
-        self.damage = self.units.keys()
-            .map(|v| {
-                let entity = world.get_entity(*v);
-                let properties = world.get_entity_properties(&entity.entity_type);
-                properties.attack.as_ref().map(|v| v.damage).unwrap_or(0)
-            })
-            .sum();
     }
 
     pub fn add_unit(&mut self, unit_id: i32, entity_type: EntityType) {

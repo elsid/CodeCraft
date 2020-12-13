@@ -552,13 +552,6 @@ impl World {
         self.is_attacked_by_opponent[position_to_index(position, self.map_size as usize)]
     }
 
-    pub fn distance_to_nearest_opponent(&self, position: Vec2i) -> Option<i32> {
-        self.opponent_entities()
-            .filter(|entity| self.get_entity_properties(&entity.entity_type).attack.is_some())
-            .map(|entity| entity.position().distance(position))
-            .min()
-    }
-
     pub fn get_protected_radius(&self) -> i32 {
         if let Some(v) = *self.protected_radius.borrow() {
             return v;
