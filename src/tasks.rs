@@ -40,7 +40,6 @@ impl TaskManager {
         }
         for task_id in done.iter() {
             match &self.tasks[task_id] {
-                Task::HarvestResources(..) => self.stats.harvest_resources -= 1,
                 Task::BuildBuilders => self.stats.build_builders -= 1,
                 Task::BuildBuilding(v) => match v.entity_type {
                     EntityType::House => self.stats.build_house -= 1,
@@ -81,7 +80,6 @@ impl TaskManager {
         let task_id = self.next_task_id;
         self.next_task_id += 1;
         match &task {
-            Task::HarvestResources(..) => self.stats.harvest_resources += 1,
             Task::BuildBuilders => self.stats.build_builders += 1,
             Task::BuildBuilding(v) => match v.entity_type {
                 EntityType::House => self.stats.build_house += 1,
@@ -102,7 +100,6 @@ impl TaskManager {
 
 #[derive(Default, Debug)]
 pub struct TasksCount {
-    pub harvest_resources: usize,
     pub build_builders: usize,
     pub build_house: usize,
     pub build_turret: usize,
@@ -115,7 +112,7 @@ pub struct TasksCount {
 
 #[derive(Debug)]
 pub enum Task {
-    HarvestResources(HarvestResourcesTask),
+    HarvestResources,
     BuildBuilders,
     RepairBuildings,
     BuildBuilding(BuildBuildingTask),
@@ -124,10 +121,6 @@ pub enum Task {
 }
 
 impl Task {
-    pub fn harvest_resources() -> Self {
-        Task::HarvestResources(HarvestResourcesTask::new())
-    }
-
     pub fn build_building(entity_type: EntityType) -> Self {
         Self::BuildBuilding(BuildBuildingTask::new(entity_type))
     }
@@ -142,7 +135,7 @@ impl Task {
 
     pub fn update(&mut self, world: &World, roles: &mut HashMap<i32, Role>, groups: &mut Vec<Group>) -> TaskStatus {
         match self {
-            Self::HarvestResources(task) => task.update(world, roles),
+            Self::HarvestResources => harvest_resources(world, roles),
             Self::BuildBuilders => build_builders(world, roles),
             Self::RepairBuildings => repair_buildings(world, roles),
             Self::BuildBuilding(task) => task.update(world, roles),
@@ -159,71 +152,36 @@ pub enum TaskStatus {
     Fail,
 }
 
-#[derive(Debug)]
-pub struct HarvestResourcesTask {
-    assignments: HashMap<i32, i32>,
-}
-
-impl HarvestResourcesTask {
-    pub fn new() -> Self {
-        Self { assignments: HashMap::new() }
-    }
-
-    pub fn update(&mut self, world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus {
-        let mut assigned_builders = HashSet::new();
-        let mut used_positions = HashSet::new();
-        for builder in world.my_builder_units() {
-            if let Role::Harvester { position, .. } = roles[&builder.id] {
-                if world.is_attacked_by_opponents(position) {
-                    roles.insert(builder.id, Role::None);
-                } else {
-                    used_positions.insert(position);
-                    assigned_builders.insert(builder.id);
-                }
-            }
-        }
-        for (builder_id, resource_id) in self.assignments.iter() {
-            if world.find_entity(*resource_id).is_none() {
-                roles.insert(*builder_id, Role::None);
-                assigned_builders.remove(builder_id);
-            }
-        }
-        self.assignments.retain(|k, _| assigned_builders.contains(k));
-        const SHIFTS: &[Vec2i] = &[Vec2i::only_y(-1), Vec2i::only_x(-1), Vec2i::only_x(1), Vec2i::only_y(1)];
-        let mut harvester_positions = HashMap::new();
-        for resource in world.resources() {
-            for shift in SHIFTS {
-                let position = resource.position() + *shift;
-                if !used_positions.contains(&position)
-                    && world.contains(position)
-                    && matches!(world.get_tile(position), Tile::Empty)
-                    && !harvester_positions.contains_key(&position)
-                    && world.is_inside_protected_perimeter(position)
-                    && !world.is_attacked_by_opponents(position) {
-                    harvester_positions.insert(position, resource.id);
-                }
-            }
-        }
-        for builder in world.my_builder_units() {
-            if matches!(roles[&builder.id], Role::None) {
-                let nearest = harvester_positions.iter()
-                    .min_by_key(|(position, resource_id)| {
-                        (
-                            builder.position().distance(**position)
-                                - world.distance_to_nearest_opponent(**position).unwrap_or(world.map_size()),
-                            **resource_id
-                        )
+pub fn harvest_resources(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus {
+    for builder in world.my_builder_units() {
+        if let Role::Harvester { resource_id } = roles[&builder.id] {
+            if world.is_attacked_by_opponents(builder.position()) {
+                roles.insert(builder.id, Role::None);
+            } else if let Some(current) = world.find_entity(resource_id) {
+                let current_distance = current.position().distance(builder.position());
+                world.resources()
+                    .filter(|resource| {
+                        world.is_inside_protected_perimeter(resource.position())
+                            && !world.is_attacked_by_opponents(resource.position())
                     })
-                    .map(|(k, v)| (*k, *v));
-                if let Some((position, resource_id)) = nearest {
-                    self.assignments.insert(builder.id, resource_id);
-                    roles.insert(builder.id, Role::Harvester { position, resource_id });
-                    harvester_positions.remove(&position);
-                }
+                    .min_by_key(|resource| resource.position().distance(builder.position()))
+                    .filter(|resource| resource.position().distance(builder.position()) < current_distance)
+                    .map(|resource| roles.insert(builder.id, Role::Harvester { resource_id: resource.id }));
+            } else {
+                roles.insert(builder.id, Role::None);
             }
         }
-        TaskStatus::Wait
+        if matches!(roles[&builder.id], Role::None) {
+            world.resources()
+                .filter(|resource| {
+                    world.is_inside_protected_perimeter(resource.position())
+                        && !world.is_attacked_by_opponents(resource.position())
+                })
+                .min_by_key(|resource| resource.position().distance(builder.position()))
+                .map(|resource| roles.insert(builder.id, Role::Harvester { resource_id: resource.id }));
+        }
     }
+    TaskStatus::Wait
 }
 
 fn build_builders(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus {

@@ -17,7 +17,6 @@ use crate::my_strategy::{EntityPlanner, Group, Positionable, SimulatedEntityActi
 pub enum Role {
     None,
     Harvester {
-        position: Vec2i,
         resource_id: i32,
     },
     UnitBuilder,
@@ -39,7 +38,7 @@ pub enum Role {
 impl Role {
     pub fn get_action(&self, entity: &Entity, world: &World, groups: &Vec<Group>, entity_targets: &HashMap<i32, Vec2i>, entity_planners: &HashMap<i32, EntityPlanner>) -> EntityAction {
         match self {
-            Role::Harvester { position, resource_id } => harvest_resources(entity, world, *position, *resource_id),
+            Role::Harvester { resource_id } => harvest_resource(entity, world, *resource_id),
             Role::UnitBuilder => build_unit(entity, world),
             Role::BuildingBuilder { position, entity_type } => build_building(entity, world, *position, entity_type),
             Role::BuildingRepairer { building_id: base_id } => repair_building(entity, world, *base_id),
@@ -57,32 +56,34 @@ impl Role {
     }
 }
 
-fn harvest_resources(builder: &Entity, world: &World, position: Vec2i, resource_id: i32) -> EntityAction {
+fn harvest_resource(entity: &Entity, world: &World, resource_id: i32) -> EntityAction {
     let builder_properties = world.get_entity_properties(&EntityType::BuilderUnit);
-    let builder_attack_properties = builder_properties.attack.as_ref().unwrap();
     EntityAction {
-        attack_action: if position == builder.position() {
+        attack_action: if world.is_attacked_by_opponents(entity.position()) {
+            let builder_attack_properties = builder_properties.attack.as_ref().unwrap();
             Some(AttackAction {
-                target: Some(resource_id),
+                target: None,
                 auto_attack: Some(AutoAttack {
                     pathfind_range: builder_attack_properties.attack_range,
                     valid_targets: vec![EntityType::BuilderUnit],
                 }),
             })
         } else {
-            None
+            Some(AttackAction {
+                target: Some(resource_id),
+                auto_attack: Some(AutoAttack {
+                    pathfind_range: 2 * builder_properties.sight_range,
+                    valid_targets: vec![EntityType::BuilderUnit, EntityType::Resource],
+                }),
+            })
         },
         build_action: None,
         repair_action: None,
-        move_action: if position != builder.position() {
-            Some(MoveAction {
-                target: position.as_model(),
-                break_through: true,
-                find_closest_position: true,
-            })
-        } else {
-            None
-        },
+        move_action: Some(MoveAction {
+            target: world.get_entity(resource_id).position.clone(),
+            break_through: true,
+            find_closest_position: true,
+        }),
     }
 }
 

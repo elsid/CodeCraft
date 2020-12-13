@@ -13,7 +13,7 @@ use model::{
 #[cfg(feature = "enable_debug")]
 use model::Color;
 
-use crate::my_strategy::{is_entity_base, is_entity_unit, Map, Positionable, Rect, Tile, Vec2i};
+use crate::my_strategy::{is_entity_base, is_entity_unit, Map, Positionable, Rect, Tile, Vec2i, visit_range, position_to_index};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{debug, Vec2f};
 
@@ -39,6 +39,7 @@ pub struct World {
     allocated_population: RefCell<i32>,
     protected_radius: RefCell<Option<i32>>,
     player_power: Vec<i32>,
+    is_attacked_by_opponent: Vec<bool>,
     #[cfg(feature = "enable_debug")]
     player_score_time_series: Vec<Vec<i32>>,
     #[cfg(feature = "enable_debug")]
@@ -87,6 +88,7 @@ impl World {
             allocated_population: RefCell::new(0),
             protected_radius: RefCell::new(None),
             player_power: std::iter::repeat(0).take(player_view.players.len()).collect(),
+            is_attacked_by_opponent: std::iter::repeat(false).take((player_view.map_size * player_view.map_size) as usize).collect(),
             #[cfg(feature = "enable_debug")]
             player_score_time_series: std::iter::repeat(Vec::new()).take(player_view.players.len()).collect(),
             #[cfg(feature = "enable_debug")]
@@ -131,6 +133,22 @@ impl World {
                 .filter(|v| v.player_id == Some(player_id))
                 .map(|v| v.health * self.get_entity_properties(&v.entity_type).attack.as_ref().map(|v| v.damage).unwrap_or(0))
                 .sum::<i32>();
+        }
+        for value in self.is_attacked_by_opponent.iter_mut() {
+            *value = false;
+        }
+        for entity_index in 0..self.entities.len() {
+            if matches!(self.entities[entity_index].entity_type, EntityType::BuilderUnit)
+                || self.entities[entity_index].player_id == Some(self.my_id) {
+                continue;
+            }
+            let properties = self.get_entity_properties(&self.entities[entity_index].entity_type);
+            if let Some(attack) = properties.attack.as_ref() {
+                let position = self.entities[entity_index].position();
+                visit_range(position, properties.size, attack.attack_range + 3, &self.bounds(), |position| {
+                    self.is_attacked_by_opponent[position_to_index(position, self.map_size as usize)] = true;
+                });
+            }
         }
         #[cfg(feature = "enable_debug")]
         for i in 0..self.players.len() {
@@ -508,15 +526,7 @@ impl World {
     }
 
     pub fn is_attacked_by_opponents(&self, position: Vec2i) -> bool {
-        self.opponent_entities()
-            .filter_map(|entity| {
-                let properties = self.get_entity_properties(&entity.entity_type);
-                properties.attack.as_ref()
-                    .map(|v| (entity.center(properties.size), properties.size / 2 + v.attack_range.max(3)))
-            })
-            .any(|(entity_position, attack_range)| {
-                entity_position.distance(position) <= attack_range
-            })
+        self.is_attacked_by_opponent[position_to_index(position, self.map_size as usize)]
     }
 
     pub fn distance_to_nearest_opponent(&self, position: Vec2i) -> Option<i32> {

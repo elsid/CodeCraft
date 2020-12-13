@@ -180,7 +180,7 @@ impl Bot {
         if self.world.current_tick() == 0 {
             self.tasks.push_back(Task::build_units(EntityType::BuilderUnit, (self.world.population_provide() - self.world.population_use()) as usize));
             self.tasks.push_back(Task::RepairBuildings);
-            self.tasks.push_back(Task::harvest_resources());
+            self.tasks.push_back(Task::HarvestResources);
         }
         false
     }
@@ -438,9 +438,9 @@ impl Bot {
             );
             if let Some(role) = self.roles.get(&entity.id) {
                 match role {
-                    Role::Harvester { position: v, .. } => debug.add_world_line(
+                    Role::Harvester { resource_id } => debug.add_world_line(
                         position,
-                        v.center(),
+                        self.world.get_entity(*resource_id).position().center(),
                         Color { a: 1.0, r: 1.0, g: 0.0, b: 0.0 },
                     ),
                     _ => (),
