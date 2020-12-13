@@ -157,13 +157,6 @@ impl Path {
     }
 }
 
-pub fn is_passable(entity_type: &EntityType) -> bool {
-    match entity_type {
-        EntityType::House | EntityType::BuilderBase | EntityType::MeleeBase | EntityType::RangedBase | EntityType::Resource | EntityType::Turret => false,
-        _ => true,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
