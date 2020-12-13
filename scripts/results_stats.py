@@ -265,7 +265,7 @@ def get_stats(games):
                     places[place + 1][k] += 1
                     places_dynamic[k].append(place + 1)
                     places_positions[place + 1][v['position']][k] += 1
-                    place_score[k] += place + 1
+                    place_score[k] += get_place_score(place + 1)
         for k, v in game['results'].items():
             players.add(k)
             if v['crashed']:
@@ -318,6 +318,10 @@ def get_stats(games):
         seeds=numpy.array(sorted(seeds)),
         place_score=place_score,
     )
+
+
+def get_place_score(place):
+    return {1: 8, 2: 4, 3: 2, 4: 1}[place]
 
 
 def cumsums(values):
