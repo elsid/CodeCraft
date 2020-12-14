@@ -55,7 +55,7 @@ impl Drop for Bot {
             ).unwrap(),
             &stats,
         ).unwrap();
-        println!("[{}] {} {}", self.world.current_tick(), stats.entity_planner_iterations, stats.find_hidden_path_calls);
+        println!("[{}] {} {} {}", self.world.current_tick(), stats.entity_planner_iterations, stats.find_hidden_path_calls, stats.path_updates);
     }
 }
 
@@ -114,7 +114,7 @@ impl Bot {
     }
 
     fn update(&mut self, player_view: &PlayerView) {
-        self.world.update(player_view);
+        self.world.update(player_view, &mut *self.stats.borrow_mut());
         self.update_roles();
         self.update_groups();
         self.update_tasks();

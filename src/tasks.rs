@@ -6,8 +6,6 @@ use crate::my_strategy::{Group, GroupState, Positionable, Role, Tile, Vec2i, Wor
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::debug;
 
-pub const TARGET_BUILDERS_COUNT: usize = 60;
-
 #[derive(Debug)]
 pub struct TaskManager {
     next_task_id: usize,
@@ -192,12 +190,12 @@ pub fn harvest_resources(world: &World, roles: &mut HashMap<i32, Role>) -> TaskS
 
 fn build_builders(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus {
     let mut builders = world.get_my_entity_count_of(&EntityType::BuilderUnit);
-    let units_count = world.get_my_units_count();
     let properties = world.get_entity_properties(&EntityType::BuilderUnit);
     let cost = world.get_entity_cost(&EntityType::BuilderUnit);
+    let max_builders_count = world.get_max_required_builders_count();
     for entity in world.my_bases() {
         if matches!(entity.entity_type, EntityType::BuilderBase) {
-            let role = if (builders < TARGET_BUILDERS_COUNT && builders < 2 * units_count / 3 || units_count / 3 < builders)
+            let role = if builders < max_builders_count
                 && entity.active
                 && (matches!(roles[&entity.id], Role::None) || matches!(roles[&entity.id], Role::UnitBuilder))
                 && world.try_allocated_resource_and_population(cost, properties.population_use) {
