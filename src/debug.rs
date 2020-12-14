@@ -131,7 +131,7 @@ impl<'a> Debug<'a> {
             .map(|(v, _)| v.iter().max().cloned().unwrap_or(0))
             .max().unwrap_or(0);
         let width = self.state.window_size.x as f32 / 3.0;
-        let height = self.state.window_size.y as f32 / 5.0;
+        let height = self.state.window_size.y as f32 / 7.0;
         let shift = Vec2f::new(2.0 * self.state.window_size.x as f32 / 3.0 - 32.0, self.state.window_size.y as f32 - (height + 64.0) * (n + 1) as f32);
         let x_scale = width / (max_len - 1) as f32;
         let y_scale = height / (max - min).max(1) as f32;

@@ -53,6 +53,8 @@ pub struct World {
     player_units_history: Vec<HashSet<i32>>,
     #[cfg(feature = "enable_debug")]
     player_total_resource_time_series: Vec<Vec<i32>>,
+    #[cfg(feature = "enable_debug")]
+    map_resource_time_series: Vec<i32>,
 }
 
 impl World {
@@ -114,6 +116,8 @@ impl World {
             player_units_history: std::iter::repeat(HashSet::new()).take(player_view.players.len()).collect(),
             #[cfg(feature = "enable_debug")]
             player_total_resource_time_series: std::iter::repeat(Vec::new()).take(player_view.players.len()).collect(),
+            #[cfg(feature = "enable_debug")]
+            map_resource_time_series: Vec::new(),
         }
     }
 
@@ -196,6 +200,8 @@ impl World {
             }
             self.player_total_resource_time_series[i].push(self.player_spent_resource[i] + self.players[i].resource);
         }
+        #[cfg(feature = "enable_debug")]
+            self.map_resource_time_series.push(self.resources().map(|v| v.health).sum());
     }
 
     pub fn my_id(&self) -> i32 {
@@ -486,6 +492,7 @@ impl World {
                 }
             }
         }
+        debug.add_static_text(format!("Map resource: {} {}", self.resources().count(), self.resources().map(|v| v.health).sum::<i32>()));
         debug.add_static_text(String::from("My entities:"));
         for (entity_type, count) in count_by_entity_type.iter() {
             debug.add_static_text(format!("{}: {}", entity_type, count));
@@ -525,6 +532,11 @@ impl World {
             String::from("Players total resource"),
             self.player_total_resource_time_series.iter().enumerate()
                 .map(|(i, v)| (v, debug::get_player_color(1.0, self.players[i].id))),
+        );
+        debug.add_time_series_i32(
+            4,
+            String::from("Map resource"),
+            [(&self.map_resource_time_series, Color { a: 1.0, r: 0.0, g: 1.0, b: 0.0 })].iter().cloned(),
         );
     }
 
