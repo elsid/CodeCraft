@@ -143,7 +143,10 @@ class Scheduler:
                     stop=stop,
                 )
             )
-        self.__workers = tuple(workers)
+        self.__workers = workers
+        self.__ports_per_worker = ports_per_worker
+        self.__verbose = verbose
+        self.__timeout = timeout
 
     def start(self):
         for worker in self.__workers:
@@ -153,9 +156,27 @@ class Scheduler:
         put = False
         while not put:
             try:
-                for worker in self.__workers:
+                for n, worker in enumerate(self.__workers):
                     if worker.stop.is_set():
-                        raise RuntimeError('Worker is stopped')
+                        port_shift = n * self.__ports_per_worker
+                        if self.__verbose:
+                            print(f'Worker {port_shift} is crashed, rerunning...')
+                        stop = threading.Event()
+                        worker = Worker(
+                            thread=threading.Thread(
+                                target=run_worker,
+                                kwargs=dict(
+                                    task_queue=self.__task_queue,
+                                    port_shift=port_shift,
+                                    stop=stop,
+                                    verbose=self.__verbose,
+                                    timeout=self.__timeout,
+                                )
+                            ),
+                            stop=stop,
+                        )
+                        worker.thread.start()
+                        self.__workers[n] = worker
                 self.__task_queue.put(task, timeout=1)
                 put = True
             except queue.Full:
@@ -232,12 +253,12 @@ def handle_task(task, port_shift, verbose, stop, timeout):
     time.sleep(0.2)
     for worker in player_workers:
         worker.thread.start()
-    wait_process(process=runner_process, stop=stop, timeout=timeout, verbose=verbose)
+    wait_process(process=runner_process, stop=stop, timeout=timeout + 1, verbose=verbose)
     duration = time.time() - start
     if verbose:
         print(f'Runner is finished with {runner_process.returncode} by worker {port_shift} in {duration}s')
     helpers.write_json(data=dict(duration=duration, code=runner_process.returncode), path=task_path)
-    if runner_process.returncode != 0:
+    if runner_process.returncode is not None and runner_process.returncode != 0:
         stop.set()
     if stop.is_set():
         for worker in player_workers:
