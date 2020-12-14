@@ -426,6 +426,9 @@ impl Bot {
                 .map(|attack| {
                     self.world.opponent_entities()
                         .any(|opponent| {
+                            if matches!(opponent.entity_type, EntityType::BuilderUnit) {
+                                return false;
+                            }
                             let opponent_properties = self.world.get_entity_properties(&opponent.entity_type);
                             if let Some(opponent_attack) = opponent_properties.attack.as_ref() {
                                 let bounds = Rect::new(opponent.position(), opponent.position() + Vec2i::both(opponent_properties.size));
