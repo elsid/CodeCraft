@@ -470,7 +470,7 @@ impl Bot {
             }
         }
         plans.sort_by_key(|(entity_id, plan)| (-plan.score, *entity_id));
-        for i in 0..plans.len() {
+        for i in 1..plans.len() {
             let planner = self.entity_planners.get_mut(&plans[i].0).unwrap();
             planner.update(
                 self.world.map_size(),
