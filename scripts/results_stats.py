@@ -89,6 +89,8 @@ def show_stats(stats, player):
     show_seed_distribution_plot(pyplot, stats)
     show_duration_distribution_plot(pyplot, stats)
 
+    show_places_positions_plot(pyplot, stats, player)
+
     pyplot.show()
 
 
@@ -197,6 +199,33 @@ def show_place_distribution_plot(pyplot, stats):
         ax.set_xticks(bins)
         ax.grid(True)
         ax.legend()
+
+
+def show_places_positions_plot(pyplot, stats, player):
+    places = sorted(stats['places_positions'].keys())
+    positions = sorted(v - 1 for v in places)
+    counts = list()
+    for place in places:
+        place_counts = list()
+        for position in positions:
+            place_counts.append(0)
+            for k, count in stats['places_positions'][place][position].items():
+                if k == player:
+                    place_counts[-1] = count
+        counts.append(place_counts)
+    fig, ax = pyplot.subplots()
+    fig.canvas.set_window_title('places_positions')
+    ax.set_title('places_positions')
+    ax.imshow(counts)
+    ax.set_xticks(numpy.arange(len(places)))
+    ax.set_yticks(numpy.arange(len(positions)))
+    ax.set_xticklabels(places)
+    ax.set_yticklabels(positions)
+    ax.set_xlabel('place')
+    ax.set_ylabel('position')
+    for i in range(len(places)):
+        for j in range(len(positions)):
+            ax.text(j, i, counts[i][j], ha="center", va="center", color="w")
 
 
 def show_seed_distribution_plot(pyplot, stats):
