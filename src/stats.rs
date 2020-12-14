@@ -6,12 +6,14 @@ use serde::Serialize;
 pub struct StatsResult {
     pub entity_planner_iterations: usize,
     pub find_hidden_path_calls: usize,
+    pub path_updates: usize,
 }
 
 #[derive(Default)]
 pub struct Stats {
     entity_planner_iterations: usize,
     find_hidden_path_calls: usize,
+    reachability_updates: usize,
 }
 
 impl Stats {
@@ -19,6 +21,7 @@ impl Stats {
         Self {
             entity_planner_iterations: 0,
             find_hidden_path_calls: 0,
+            reachability_updates: 0,
         }
     }
 
@@ -26,6 +29,7 @@ impl Stats {
         StatsResult {
             entity_planner_iterations: self.entity_planner_iterations,
             find_hidden_path_calls: self.find_hidden_path_calls,
+            path_updates: self.reachability_updates,
         }
     }
 
@@ -35,5 +39,9 @@ impl Stats {
 
     pub fn add_find_hidden_path_calls(&mut self, number: usize) {
         self.find_hidden_path_calls += number;
+    }
+
+    pub fn add_path_updates(&mut self, number: usize) {
+        self.reachability_updates += number;
     }
 }

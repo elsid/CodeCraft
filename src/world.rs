@@ -1,7 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{BinaryHeap, HashMap};
-#[cfg(feature = "enable_debug")]
-use std::collections::HashSet;
+use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use model::{
     Entity,
@@ -13,7 +11,7 @@ use model::{
 #[cfg(feature = "enable_debug")]
 use model::Color;
 
-use crate::my_strategy::{Config, index_to_position, is_entity_base, is_entity_unit, Map, position_to_index, Positionable, Range, Rect, Tile, Vec2i, visit_range, visit_reversed_shortest_path};
+use crate::my_strategy::{Config, index_to_position, is_entity_base, is_entity_unit, Map, ReachabilityMap, position_to_index, Positionable, Range, Rect, Tile, Vec2i, visit_neighbour, visit_range, visit_reversed_shortest_path, visit_square, Stats};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{debug, Vec2f};
 
@@ -42,6 +40,11 @@ pub struct World {
     player_power: Vec<i32>,
     is_attacked_by_opponent: Vec<bool>,
     last_player_activity: Vec<i32>,
+    base_center: Vec2i,
+    reachability_map: RefCell<ReachabilityMap>,
+    known_map_resource: i32,
+    predicted_map_resource: f32,
+    is_passable: Vec<bool>,
     config: Config,
     #[cfg(feature = "enable_debug")]
     player_score_time_series: Vec<Vec<i32>>,
@@ -57,6 +60,10 @@ pub struct World {
     player_total_resource_time_series: Vec<Vec<i32>>,
     #[cfg(feature = "enable_debug")]
     map_resource_time_series: Vec<i32>,
+    #[cfg(feature = "enable_debug")]
+    predicted_map_resource_time_series: Vec<i32>,
+    #[cfg(feature = "enable_debug")]
+    total_map_resource_time_series: Vec<i32>,
 }
 
 impl World {
@@ -107,6 +114,11 @@ impl World {
             player_power: std::iter::repeat(0).take(player_view.players.len()).collect(),
             is_attacked_by_opponent: std::iter::repeat(false).take((player_view.map_size * player_view.map_size) as usize).collect(),
             last_player_activity: std::iter::repeat(player_view.current_tick).take(player_view.players.len()).collect(),
+            base_center: Vec2i::new(start_position_x, start_position_y),
+            reachability_map: RefCell::new(ReachabilityMap::new(player_view.map_size as usize)),
+            known_map_resource: 0,
+            predicted_map_resource: 0.0,
+            is_passable: Vec::new(),
             config,
             #[cfg(feature = "enable_debug")]
             player_score_time_series: std::iter::repeat(Vec::new()).take(player_view.players.len()).collect(),
@@ -122,10 +134,14 @@ impl World {
             player_total_resource_time_series: std::iter::repeat(Vec::new()).take(player_view.players.len()).collect(),
             #[cfg(feature = "enable_debug")]
             map_resource_time_series: Vec::new(),
+            #[cfg(feature = "enable_debug")]
+            predicted_map_resource_time_series: Vec::new(),
+            #[cfg(feature = "enable_debug")]
+            total_map_resource_time_series: Vec::new(),
         }
     }
 
-    pub fn update(&mut self, player_view: &PlayerView) {
+    pub fn update(&mut self, player_view: &PlayerView, stats: &mut Stats) {
         self.current_tick = player_view.current_tick;
         if !self.players.is_empty() {
             for i in 0..self.players.len() {
@@ -220,6 +236,48 @@ impl World {
                 });
             }
         }
+        let base_center = if !matches!(self.map.borrow().get_tile(self.base_center), Tile::Empty) {
+            let mut base_center = None;
+            let mut min_distance_to_start = std::i32::MAX;
+            let mut min_distance_to_center = std::i32::MAX;
+            visit_range(self.start_position, 1, self.protected_radius, &self.bounds(), |position| {
+                if !matches!(self.map.borrow().get_tile(position), Tile::Empty) {
+                    return;
+                }
+                let distance_to_start = self.start_position.distance(position);
+                let distance_to_center = self.start_position.distance(Vec2i::both(self.map_size / 2));
+                if (min_distance_to_start, min_distance_to_center) > (distance_to_start, distance_to_center) {
+                    base_center = Some(position);
+                    min_distance_to_start = distance_to_start;
+                    min_distance_to_center = distance_to_center;
+                }
+            });
+            base_center.unwrap_or(self.start_position)
+        } else {
+            self.base_center
+        };
+        let mut is_passable: Vec<bool> = std::iter::repeat(true)
+            .take((self.map_size * self.map_size) as usize)
+            .collect();
+        for entity in self.entities.iter() {
+            match &entity.entity_type {
+                EntityType::BuilderUnit | EntityType::MeleeUnit | EntityType::RangedUnit => continue,
+                _ => (),
+            }
+            let size = self.get_entity_properties(&entity.entity_type).size;
+            visit_square(entity.position(), size, |position| {
+                is_passable[position_to_index(position, self.map_size as usize)] = false;
+            });
+        }
+        if self.base_center != base_center || self.is_passable != is_passable {
+            stats.add_path_updates(1);
+            self.reachability_map.borrow_mut().update(base_center, &is_passable);
+            self.is_passable = is_passable;
+            self.base_center = base_center;
+        }
+        self.known_map_resource = self.resources().map(|v| v.health).sum();
+        let discovered_map_part = 1.0 - self.count_unknown_tiles() as f32 / (self.map_size * self.map_size) as f32;
+        self.predicted_map_resource = self.known_map_resource as f32 / discovered_map_part - self.known_map_resource as f32;
         #[cfg(feature = "enable_debug")]
         for i in 0..self.players.len() {
             let player_id = self.players[i].id;
@@ -254,7 +312,11 @@ impl World {
             self.player_total_resource_time_series[i].push(self.player_spent_resource[i] + self.players[i].resource);
         }
         #[cfg(feature = "enable_debug")]
-            self.map_resource_time_series.push(self.resources().map(|v| v.health).sum());
+            self.map_resource_time_series.push(self.known_map_resource);
+        #[cfg(feature = "enable_debug")]
+            self.predicted_map_resource_time_series.push(self.predicted_map_resource as i32);
+        #[cfg(feature = "enable_debug")]
+            self.total_map_resource_time_series.push(self.known_map_resource + self.predicted_map_resource as i32);
     }
 
     pub fn my_id(&self) -> i32 {
@@ -287,6 +349,10 @@ impl World {
 
     pub fn get_tile(&self, position: Vec2i) -> Tile {
         self.map.borrow().get_tile(position)
+    }
+
+    pub fn count_unknown_tiles(&self) -> usize {
+        self.map.borrow().count_unknown_tiles()
     }
 
     pub fn is_tile_locked(&self, position: Vec2i) -> bool {
@@ -554,7 +620,8 @@ impl World {
                 }
             }
         }
-        debug.add_static_text(format!("Map resource: {} {}", self.resources().count(), self.resources().map(|v| v.health).sum::<i32>()));
+        debug.add_static_text(format!("Map resource: {} k + {} p = {}", self.known_map_resource, self.predicted_map_resource, self.known_map_resource as f32 + self.predicted_map_resource));
+        debug.add_static_text(format!("Max required builders: {}", self.get_max_required_builders_count()));
         debug.add_static_text(String::from("My entities:"));
         for (entity_type, count) in count_by_entity_type.iter() {
             debug.add_static_text(format!("{}: {}", entity_type, count));
@@ -598,7 +665,11 @@ impl World {
         debug.add_time_series_i32(
             4,
             String::from("Map resource"),
-            [(&self.map_resource_time_series, Color { a: 1.0, r: 0.0, g: 1.0, b: 0.0 })].iter().cloned(),
+            [
+                (&self.map_resource_time_series, Color { a: 1.0, r: 0.0, g: 1.0, b: 0.0 }),
+                (&self.predicted_map_resource_time_series, Color { a: 1.0, r: 0.0, g: 0.0, b: 1.0 }),
+                (&self.total_map_resource_time_series, Color { a: 1.0, r: 1.0, g: 0.0, b: 0.0 }),
+            ].iter().cloned(),
         );
     }
 
@@ -632,6 +703,24 @@ impl World {
 
     pub fn is_inside_protected_perimeter(&self, position: Vec2i) -> bool {
         position.distance(self.start_position) <= self.protected_radius()
+    }
+
+    pub fn get_max_required_builders_count(&self) -> usize {
+        let mut harvest_positions = HashSet::new();
+        visit_range(self.start_position, 1, self.protected_radius, &self.bounds(), |position| {
+            if let Some(EntityType::Resource) = self.get_tile_entity_type(self.get_tile(position)) {
+                visit_neighbour(position, 1, |position| {
+                    if self.contains(position) && self.is_reachable_from_base(position) {
+                        harvest_positions.insert(position);
+                    }
+                });
+            }
+        });
+        let properties = self.get_entity_properties(&EntityType::BuilderUnit);
+        let map_resource_estimate = self.known_map_resource as f32 + self.predicted_map_resource * (1.0 - self.current_tick as f32 / self.max_tick_count as f32) / 2.0;
+        let ticks_left = (self.max_tick_count - self.current_tick).max(1);
+        ((map_resource_estimate / (properties.attack.as_ref().unwrap().damage * ticks_left) as f32).round().max(1.0) as usize)
+            .min(harvest_positions.len())
     }
 
     pub fn has_active_base_for(&self, entity_type: &EntityType) -> bool {
@@ -759,6 +848,10 @@ impl World {
             4 => Vec2i::new(10, self.map_size - 10),
             _ => Vec2i::both(self.map_size / 2),
         }
+    }
+
+    pub fn is_reachable_from_base(&self, position: Vec2i) -> bool {
+        self.reachability_map.borrow().is_reachable(position)
     }
 }
 

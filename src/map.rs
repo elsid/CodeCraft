@@ -144,6 +144,10 @@ impl Map {
         );
     }
 
+    pub fn count_unknown_tiles(&self) -> usize {
+        self.tiles.iter().filter(|v| matches!(**v, Tile::Unknown)).count()
+    }
+
     fn get_tile_index(&self, position: Vec2i) -> usize {
         position_to_index(position, self.size)
     }
