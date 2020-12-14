@@ -157,7 +157,6 @@ impl EntitySimulator {
                 }
             }
         }
-        self.actions.retain(|v| !matches!(v.action_type, SimulatedEntityActionType::None));
         self.actions.shuffle(rng);
         for action_index in 0..self.actions.len() {
             if let SimulatedEntityActionType::Attack { target } = self.actions[action_index].action_type.clone() {
