@@ -16,7 +16,7 @@ use rand::SeedableRng;
 
 #[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
-use crate::my_strategy::{Config, EntityPlanner, EntitySimulator, Group, GroupState, is_protected_entity_type, Positionable, Rect, Role, Stats, Task, TaskManager, Tile, Vec2i, World};
+use crate::my_strategy::{Config, EntityPlanner, EntitySimulator, Group, GroupState, is_protected_entity_type, Positionable, Range, Rect, Role, Stats, Task, TaskManager, Tile, Vec2i, World};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
@@ -31,7 +31,7 @@ enum OpeningType {
 }
 
 pub struct Bot {
-    stats: Stats,
+    stats: RefCell<Stats>,
     roles: HashMap<i32, Role>,
     next_group_id: u32,
     groups: Vec<Group>,
@@ -47,15 +47,15 @@ pub struct Bot {
 
 impl Drop for Bot {
     fn drop(&mut self) {
-        let stats = self.stats.get_result();
+        let stats = self.stats.borrow().get_result();
         #[cfg(feature = "write_stats")]
             serde_json::to_writer(
-                &mut std::fs::File::create(
-                    std::env::var("STATS").expect("STATS env is not found")
-                ).unwrap(),
-                &stats,
-            ).unwrap();
-        println!("[{}] {}", self.world.current_tick(), stats.entity_planner_iterations);
+            &mut std::fs::File::create(
+                std::env::var("STATS").expect("STATS env is not found")
+            ).unwrap(),
+            &stats,
+        ).unwrap();
+        println!("[{}] {} {}", self.world.current_tick(), stats.entity_planner_iterations, stats.find_hidden_path_calls);
     }
 }
 
@@ -70,7 +70,7 @@ impl Bot {
             roles: player_view.entities.iter()
                 .filter(|v| v.player_id == Some(player_view.my_id))
                 .map(|v| (v.id, Role::None)).collect(),
-            stats: Stats::default(),
+            stats: RefCell::new(Stats::default()),
             tasks: TaskManager::new(),
             actions: HashMap::new(),
             opening: if player_view.entities.iter()
@@ -399,8 +399,16 @@ impl Bot {
                             nearest_free_position = Some(position);
                         }
                     });
-                    if let Some(nearest_free_position) = nearest_free_position {
-                        return Some(nearest_free_position);
+                    if let Some(target) = nearest_free_position {
+                        return if self.world.is_tile_cached(target) {
+                            self.stats.borrow_mut().add_find_hidden_path_calls(1);
+                            self.world.find_shortest_path_next_position(
+                                entity.position(),
+                                &Range::new(target, properties.sight_range),
+                            )
+                        } else {
+                            Some(target)
+                        };
                     }
                 }
             }
@@ -465,7 +473,7 @@ impl Bot {
                 self.config.entity_plan_max_iterations,
                 &Vec::new(),
                 &mut *rng,
-                &mut self.stats,
+                &mut *self.stats.borrow_mut(),
             );
             if !planner.plan().transitions.is_empty() {
                 simulators.push(simulator);
@@ -482,7 +490,7 @@ impl Bot {
                 self.config.entity_plan_max_iterations,
                 &plans[0..i],
                 &mut *rng,
-                &mut self.stats,
+                &mut *self.stats.borrow_mut(),
             );
             if !planner.plan().transitions.is_empty() {
                 plans[i].1 = planner.plan().clone();

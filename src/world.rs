@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{BinaryHeap, HashMap};
 #[cfg(feature = "enable_debug")]
 use std::collections::HashSet;
 
@@ -13,7 +13,7 @@ use model::{
 #[cfg(feature = "enable_debug")]
 use model::Color;
 
-use crate::my_strategy::{is_entity_base, is_entity_unit, Map, position_to_index, Positionable, Rect, Tile, Vec2i, visit_range};
+use crate::my_strategy::{index_to_position, is_entity_base, is_entity_unit, Map, position_to_index, Positionable, Range, Rect, Tile, Vec2i, visit_range, visit_reversed_shortest_path};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{debug, Vec2f};
 
@@ -655,6 +655,83 @@ impl World {
         if let Tile::Entity(entity_id) = tile {
             return Some(self.get_entity(entity_id).entity_type.clone());
         }
+        None
+    }
+
+    pub fn find_shortest_path_next_position(&self, src: Vec2i, target: &Range) -> Option<Vec2i> {
+        let bounds = self.bounds();
+        let size = self.map_size as usize;
+
+        let mut open: Vec<bool> = std::iter::repeat(true)
+            .take(size * size)
+            .collect();
+        let mut costs: Vec<i32> = std::iter::repeat(std::i32::MAX)
+            .take(size * size)
+            .collect();
+        let mut backtrack: Vec<usize> = (0..(size * size)).into_iter().collect();
+        let mut discovered = BinaryHeap::new();
+
+        let src_index = position_to_index(src, size);
+
+        costs[src_index] = 0;
+        discovered.push((-target.center().distance(src), src_index));
+
+        const EDGES: &[Vec2i] = &[
+            Vec2i::only_x(1),
+            Vec2i::only_x(-1),
+            Vec2i::only_y(1),
+            Vec2i::only_y(-1),
+        ];
+
+        let mut nearest_position_index = None;
+        let mut min_distance = std::i32::MAX;
+
+        while let Some((_, node_index)) = discovered.pop() {
+            let node_position = index_to_position(node_index, size);
+            let distance = target.center().distance(node_position);
+            if min_distance > distance {
+                min_distance = distance;
+                nearest_position_index = Some(node_index);
+                if distance <= target.radius() {
+                    break;
+                }
+            }
+            open[node_index] = true;
+            for &shift in EDGES.iter() {
+                let neighbour_position = node_position + shift;
+                if !bounds.contains(neighbour_position) {
+                    continue;
+                }
+                match self.get_tile(neighbour_position) {
+                    Tile::Entity(..) => continue,
+                    _ => (),
+                }
+                let new_cost = costs[node_index] + 1;
+                let neighbour_index = position_to_index(neighbour_position, size);
+                if costs[neighbour_index] <= new_cost {
+                    continue;
+                }
+                costs[neighbour_index] = new_cost;
+                backtrack[neighbour_index] = node_index;
+                if !open[neighbour_index] {
+                    continue;
+                }
+                open[neighbour_index] = false;
+                let new_score = new_cost + target.center().distance(neighbour_position);
+                discovered.push((-new_score, neighbour_index));
+            }
+        }
+
+        if let Some(dst) = nearest_position_index {
+            let mut first_position_index = None;
+            let success = visit_reversed_shortest_path(src_index, dst, &backtrack, |index| {
+                first_position_index = Some(index);
+            });
+            if success {
+                return first_position_index.map(|v| index_to_position(v, size));
+            }
+        }
+
         None
     }
 }
