@@ -245,6 +245,7 @@ def handle_task(task, port_shift, verbose, stop, timeout):
                         stop=stop_worker,
                         timeout=timeout,
                         config_path=task.runner.config_path,
+                        stats_path=os.path.join(task.runner.output_path, f'{player.start_port}.stats.json'),
                     ),
                 ),
                 stop=stop_worker,
@@ -265,6 +266,15 @@ def handle_task(task, port_shift, verbose, stop, timeout):
             worker.stop.set()
     for worker in player_workers:
         worker.thread.join()
+    stats = dict()
+    for player in task.players:
+        stats_path = os.path.join(task.runner.output_path, f'{player.start_port}.stats.json')
+        player_name = format_player_name(player) if player.name is None else player.name
+        if os.path.exists(stats_path):
+            stats[player_name] = helpers.read_json(stats_path)
+        else:
+            stats[player_name] = dict()
+    helpers.write_json(stats, os.path.join(task.runner.output_path, 'stats.json'))
 
 
 def format_player_name(player):
@@ -273,11 +283,12 @@ def format_player_name(player):
     return f'{player.type}:{player.start_port}:{os.path.split(player.bin_path)[-1]}'
 
 
-def run_player(bin_path, port, verbose, stop, timeout, config_path):
+def run_player(bin_path, port, verbose, stop, timeout, config_path, stats_path):
     env = os.environ.copy()
     env['RUST_BACKTRACE'] = '1'
     if config_path is not None:
         env['CONFIG'] = str(config_path)
+    env['STATS'] = str(stats_path)
     args = [os.path.abspath(bin_path), '127.0.0.1', str(port)]
     fails = 0
     while fails < 3 and not stop.is_set():

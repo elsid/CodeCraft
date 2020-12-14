@@ -17,8 +17,6 @@ pub use groups::*;
 #[allow(unused_imports)]
 pub use map::*;
 #[allow(unused_imports)]
-pub use moving_average::*;
-#[allow(unused_imports)]
 pub use path::*;
 #[allow(unused_imports)]
 pub use positionable::*;
@@ -68,9 +66,6 @@ pub mod tasks;
 
 #[path = "entity_type.rs"]
 pub mod entity_type;
-
-#[path = "moving_average.rs"]
-pub mod moving_average;
 
 #[path = "stats.rs"]
 pub mod stats;

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import functools
+import helpers
 import json
 import math
 import numbers
@@ -240,6 +241,7 @@ def get_stats(games):
     wins_dynamic = defaultdict(list)
     losses_dynamic = defaultdict(list)
     place_score = Counter()
+    entity_planner_iterations = defaultdict(list)
     for number, game in enumerate(games):
         fails += game['code'] != 0
         durations.append(game['duration'])
@@ -278,6 +280,8 @@ def get_stats(games):
             if len(losses_dynamic[k]) < number + 1:
                 losses_dynamic[k].append(0)
         seeds.add(game['seed'])
+        for k, v in game.get('stats', dict()).items():
+            entity_planner_iterations[k].append(int(v.get('entity_planner_iterations', 0)))
     for k in scores.keys():
         scores[k] = numpy.array(scores[k])
         places_dynamic[k] = numpy.array(places_dynamic[k])
@@ -317,6 +321,10 @@ def get_stats(games):
         positions_dynamic=positions_dynamic,
         seeds=numpy.array(sorted(seeds)),
         place_score=place_score,
+        min_entity_planner_iterations={k: min(v) for k, v in entity_planner_iterations.items()},
+        max_entity_planner_iterations={k: max(v) for k, v in entity_planner_iterations.items()},
+        median_entity_planner_iterations={k: statistics.median(v) for k, v in entity_planner_iterations.items()},
+        mean_entity_planner_iterations={k: statistics.mean(v) for k, v in entity_planner_iterations.items()},
     )
 
 
@@ -355,6 +363,9 @@ def collect_data(paths):
         players = tuple(json.loads(players_content))
         result = parse_result(result_content, players)
         result.update(json.loads(task_content))
+        stats_path = os.path.join(path, 'stats.json')
+        if os.path.exists(stats_path):
+            result['stats'] = helpers.read_json(stats_path)
         yield result
 
 

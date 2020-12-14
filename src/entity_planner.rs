@@ -6,7 +6,7 @@ use model::Color;
 use rand::Rng;
 use rand::seq::SliceRandom;
 
-use crate::my_strategy::{EntitySimulator, position_to_index, SimulatedEntity, SimulatedEntityAction, SimulatedEntityActionType, Vec2i, visit_range};
+use crate::my_strategy::{EntitySimulator, position_to_index, SimulatedEntity, SimulatedEntityAction, SimulatedEntityActionType, Stats, Vec2i, visit_range};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
@@ -71,7 +71,7 @@ impl EntityPlanner {
 
     pub fn update<R: Rng>(&mut self, map_size: i32, simulator: EntitySimulator,
                           entity_properties: &Vec<EntityProperties>, max_iterations: usize,
-                          plans: &[(i32, EntityPlan)], rng: &mut R) {
+                          plans: &[(i32, EntityPlan)], rng: &mut R, stats: &mut Stats) {
         self.states.clear();
         self.transitions.clear();
         self.states.push(State {
@@ -117,6 +117,8 @@ impl EntityPlanner {
                 frontier.push(self.add_transition(action_type, &other_actions, state_index, entity_properties, rng));
             }
         }
+
+        stats.add_entity_planner_iterations(iteration);
 
         self.optimal_final_state_index = optimal_final_state_index;
         self.plan = optimal_final_state_index

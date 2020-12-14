@@ -1,31 +1,31 @@
-use crate::my_strategy::{MovingAverageSpeed, World};
+#[cfg(feature = "write_stats")]
+use serde::Serialize;
 
+#[derive(Debug)]
+#[cfg_attr(feature = "write_stats", derive(Serialize))]
+pub struct StatsResult {
+    pub entity_planner_iterations: usize,
+}
+
+#[derive(Default)]
 pub struct Stats {
-    player_id: i32,
-    resource_rate: MovingAverageSpeed<i32>,
-    score_rate: MovingAverageSpeed<i32>,
+    entity_planner_iterations: usize,
 }
 
 impl Stats {
-    pub fn new(player_id: i32) -> Self {
+    pub fn new() -> Self {
         Self {
-            player_id,
-            resource_rate: MovingAverageSpeed::new(50, 50),
-            score_rate: MovingAverageSpeed::new(50, 50),
+            entity_planner_iterations: 0,
         }
     }
 
-    pub fn update(&mut self, world: &World) {
-        let player = world.get_player(self.player_id);
-        self.resource_rate.add(player.resource, world.current_tick());
-        self.score_rate.add(player.score, world.current_tick());
+    pub fn get_result(&self) -> StatsResult {
+        StatsResult {
+            entity_planner_iterations: self.entity_planner_iterations,
+        }
     }
 
-    pub fn resource_rate(&self) -> f32 {
-        self.resource_rate.get()
-    }
-
-    pub fn score_rate(&self) -> f32 {
-        self.score_rate.get()
+    pub fn add_entity_planner_iterations(&mut self, number: usize) {
+        self.entity_planner_iterations += number;
     }
 }

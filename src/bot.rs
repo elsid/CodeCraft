@@ -31,7 +31,7 @@ enum OpeningType {
 }
 
 pub struct Bot {
-    stats: Vec<(i32, Stats)>,
+    stats: Stats,
     roles: HashMap<i32, Role>,
     next_group_id: u32,
     groups: Vec<Group>,
@@ -45,6 +45,20 @@ pub struct Bot {
     rng: RefCell<StdRng>,
 }
 
+impl Drop for Bot {
+    fn drop(&mut self) {
+        let stats = self.stats.get_result();
+        #[cfg(feature = "write_stats")]
+            serde_json::to_writer(
+                &mut std::fs::File::create(
+                    std::env::var("STATS").expect("STATS env is not found")
+                ).unwrap(),
+                &stats,
+            ).unwrap();
+        println!("[{}] {}", self.world.current_tick(), stats.entity_planner_iterations);
+    }
+}
+
 impl Bot {
     pub fn new(player_view: &PlayerView, config: Config) -> Self {
         let seed = player_view.entities.iter()
@@ -56,7 +70,7 @@ impl Bot {
             roles: player_view.entities.iter()
                 .filter(|v| v.player_id == Some(player_view.my_id))
                 .map(|v| (v.id, Role::None)).collect(),
-            stats: player_view.players.iter().map(|v| (v.id, Stats::new(v.id))).collect(),
+            stats: Stats::default(),
             tasks: TaskManager::new(),
             actions: HashMap::new(),
             opening: if player_view.entities.iter()
@@ -101,20 +115,12 @@ impl Bot {
 
     fn update(&mut self, player_view: &PlayerView) {
         self.world.update(player_view);
-        self.update_stats();
         self.update_roles();
         self.update_groups();
         self.update_tasks();
         self.update_group_targets();
         self.update_entity_targets();
         self.update_entity_plans();
-    }
-
-    fn update_stats(&mut self) {
-        let world = &self.world;
-        for (_, stats) in self.stats.iter_mut() {
-            stats.update(world);
-        }
     }
 
     fn update_roles(&mut self) {
@@ -456,6 +462,7 @@ impl Bot {
                 self.config.entity_plan_max_iterations,
                 &Vec::new(),
                 &mut *rng,
+                &mut self.stats,
             );
             if !planner.plan().transitions.is_empty() {
                 simulators.push(simulator);
@@ -472,6 +479,7 @@ impl Bot {
                 self.config.entity_plan_max_iterations,
                 &plans[0..i],
                 &mut *rng,
+                &mut self.stats,
             );
             if !planner.plan().transitions.is_empty() {
                 plans[i].1 = planner.plan().clone();
