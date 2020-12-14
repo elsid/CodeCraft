@@ -92,7 +92,7 @@ impl World {
             my_entities_count: std::iter::repeat(0)
                 .take(player_view.entity_properties.len())
                 .collect(),
-            map: RefCell::new(Map::new(player_view)),
+            map: RefCell::new(Map::new(player_view.map_size as usize)),
             population_use: 0,
             population_provide: 0,
             start_position: Vec2i::new(start_position_x, start_position_y),
@@ -124,7 +124,43 @@ impl World {
     pub fn update(&mut self, player_view: &PlayerView) {
         self.current_tick = player_view.current_tick;
         self.players = player_view.players.clone();
-        self.entities = player_view.entities.clone();
+        self.map.borrow_mut().update_with_actual(
+            player_view.my_id,
+            player_view.fog_of_war,
+            &player_view.entities,
+            &self.entity_properties,
+        );
+        if player_view.fog_of_war {
+            for entity in player_view.entities.iter() {
+                if let Some(existing) = self.entities_by_id.get(&entity.id).cloned() {
+                    self.entities[existing] = entity.clone();
+                }
+            }
+            for entity in self.entities.iter() {
+                if entity.player_id == Some(self.my_id) {
+                    self.entities_by_id.remove(&entity.id);
+                }
+            }
+            self.entities.retain(|entity| entity.player_id != Some(player_view.my_id));
+            self.map.borrow_mut().update_with_cached(&self.entities, &self.entity_properties);
+            let map = self.map.borrow();
+            let entity_properties = &self.entity_properties;
+            self.entities.retain(|v| {
+                map.find_inside_square(v.position(), entity_properties[v.entity_type.clone() as usize].size, |_, tile, _| {
+                    match tile {
+                        Tile::Entity(entity_id) => entity_id != v.id,
+                        _ => true,
+                    }
+                }).is_none()
+            });
+            for entity in player_view.entities.iter() {
+                if !self.entities_by_id.contains_key(&entity.id) {
+                    self.entities.push(entity.clone());
+                }
+            }
+        } else {
+            self.entities = player_view.entities.clone();
+        }
         self.entities_by_id = self.entities.iter().enumerate().map(|(n, v)| (v.id, n)).collect();
         for count in self.my_entities_count.iter_mut() {
             *count = 0;
@@ -135,7 +171,6 @@ impl World {
                 entities_count[entity.entity_type.clone() as usize] += 1;
             }
         }
-        self.map.borrow_mut().update(player_view);
         self.population_use = self.my_entities().map(|v| self.get_entity_properties(&v.entity_type).population_use).sum();
         self.population_provide = self.my_entities().map(|v| self.get_entity_properties(&v.entity_type).population_provide).sum();
         *self.base_size.borrow_mut() = None;
@@ -232,6 +267,10 @@ impl World {
 
     pub fn is_tile_locked(&self, position: Vec2i) -> bool {
         self.map.borrow().is_tile_locked(position)
+    }
+
+    pub fn is_tile_cached(&self, position: Vec2i) -> bool {
+        self.map.borrow().is_tile_cached(position)
     }
 
     pub fn population_use(&self) -> i32 {

@@ -1,8 +1,8 @@
 use std::iter::repeat;
 
+use model::{Entity, EntityProperties};
 #[cfg(feature = "enable_debug")]
 use model::Color;
-use model::PlayerView;
 
 use crate::my_strategy::{Positionable, Rect, Vec2i};
 #[cfg(feature = "enable_debug")]
@@ -20,44 +20,76 @@ pub struct Map {
     size: usize,
     tiles: Vec<Tile>,
     locked: Vec<bool>,
+    cached: Vec<bool>,
 }
 
 impl Map {
-    pub fn new(player_view: &PlayerView) -> Self {
-        let mut result = Self {
-            size: player_view.map_size as usize,
-            tiles: repeat(Tile::Unknown).take((player_view.map_size * player_view.map_size) as usize).collect(),
-            locked: repeat(false).take((player_view.map_size * player_view.map_size) as usize).collect(),
-        };
-        result.update(player_view);
-        result
+    pub fn new(size: usize) -> Self {
+        Self {
+            size,
+            tiles: repeat(Tile::Unknown).take(size * size).collect(),
+            locked: repeat(false).take(size * size).collect(),
+            cached: repeat(false).take(size * size).collect(),
+        }
     }
 
-    pub fn update(&mut self, player_view: &PlayerView) {
+    pub fn update_with_actual(&mut self, player_id: i32, fog_of_war: bool, entities: &Vec<Entity>, entity_properties: &Vec<EntityProperties>) {
         for i in 0..self.tiles.len() {
-            self.tiles[i] = if player_view.fog_of_war {
+            self.tiles[i] = if fog_of_war {
                 Tile::Unknown
             } else {
                 Tile::Empty
+            };
+        }
+        if fog_of_war {
+            for value in self.cached.iter_mut() {
+                *value = true;
             }
         }
-        for entity in player_view.entities.iter() {
-            let position = entity.position();
-            let properties = &player_view.entity_properties[&entity.entity_type];
-            for y in position.y()..position.y() + properties.size {
-                for x in position.x()..position.x() + properties.size {
-                    let index = self.get_tile_index(Vec2i::new(x, y));
-                    self.tiles[index] = Tile::Entity(entity.id);
+        for entity in entities.iter() {
+            let size = entity_properties[entity.entity_type.clone() as usize].size;
+            let map_size = self.size;
+            visit_square(entity.position(), size, |position| {
+                let index = position_to_index(position, map_size);
+                self.tiles[index] = Tile::Entity(entity.id);
+                self.cached[index] = false;
+            });
+        }
+        if fog_of_war {
+            for entity in entities.iter() {
+                if entity.player_id == Some(player_id) {
+                    let position = entity.position();
+                    let properties = &entity_properties[entity.entity_type.clone() as usize];
+                    let bounds = Rect::new(Vec2i::zero(), Vec2i::both(self.size as i32));
+                    visit_range(position, properties.size, properties.sight_range, &bounds, |tile_position| {
+                        let index = self.get_tile_index(tile_position);
+                        match self.tiles[index] {
+                            Tile::Unknown => {
+                                self.tiles[index] = Tile::Empty;
+                                self.cached[index] = false;
+                            }
+                            _ => (),
+                        }
+                    });
                 }
             }
-            if player_view.fog_of_war && entity.player_id == Some(player_view.my_id) {
-                let position = entity.position();
-                let bounds = Rect::new(Vec2i::zero(), Vec2i::both(self.size as i32));
-                visit_range(position, properties.size, properties.sight_range, &bounds, |tile_position| {
-                    let index = self.get_tile_index(tile_position);
-                    if matches!(self.tiles[index], Tile::Unknown) {
-                        self.tiles[index] = Tile::Empty;
-                    }
+        }
+    }
+
+    pub fn update_with_cached(&mut self, entities: &Vec<Entity>, entity_properties: &Vec<EntityProperties>) {
+        for entity in entities.iter() {
+            let size = entity_properties[entity.entity_type.clone() as usize].size;
+            let busy = find_inside_square(entity.position(), size, |position| {
+                match self.tiles[self.get_tile_index(position)] {
+                    Tile::Entity(entity_id) => entity_id != entity.id,
+                    Tile::Empty => true,
+                    _ => false,
+                }
+            }).is_some();
+            if !busy {
+                let map_size = self.size;
+                visit_square(entity.position(), size, |position| {
+                    self.tiles[position_to_index(position, map_size)] = Tile::Entity(entity.id);
                 });
             }
         }
@@ -74,6 +106,10 @@ impl Map {
 
     pub fn is_tile_locked(&self, position: Vec2i) -> bool {
         self.locked[self.get_tile_index(position)]
+    }
+
+    pub fn is_tile_cached(&self, position: Vec2i) -> bool {
+        self.cached[self.get_tile_index(position)]
     }
 
     pub fn lock_tile(&mut self, position: Vec2i) {
@@ -332,6 +368,18 @@ pub fn visit_square<F: FnMut(Vec2i)>(position: Vec2i, size: i32, mut f: F) {
             f(Vec2i::new(x, y))
         }
     }
+}
+
+pub fn find_inside_square<F: FnMut(Vec2i) -> bool>(position: Vec2i, size: i32, mut f: F) -> Option<Vec2i> {
+    for y in position.y()..position.y() + size {
+        for x in position.x()..position.x() + size {
+            let tile_position = Vec2i::new(x, y);
+            if f(tile_position) {
+                return Some(tile_position);
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]
