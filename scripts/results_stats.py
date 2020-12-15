@@ -161,16 +161,21 @@ def show_plot(pyplot, name, values):
 
 
 def show_score_distribution_plot(pyplot, stats):
-    players = stats['players']
     fig, ax = pyplot.subplots()
     fig.canvas.set_window_title('score_distribution')
     ax.set_title('score_distribution')
-    bins = numpy.linspace(0, max(stats['max_score'][v] for v in players) + 1, 50)
+    max_value = max(max(v) for v in stats['scores_dynamic'].values())
+    bins = numpy.linspace(0, max_value + max_value / 12, 13)
     for player, values in stats['scores_dynamic'].items():
-        ax.hist(values, bins=bins, label=player, alpha=0.5)
-        ax.set_xticks(bins)
-        ax.grid(True)
-        ax.legend()
+        p, x = numpy.histogram(values, bins=bins)
+        p = [0] + list(p) + [0]
+        x = x[:-1] + (x[1] - x[0]) / 2
+        x = [x[0] - (x[1] - x[0])] + list(x) + [x[-1] + (x[1] - x[0])]
+        color = ax.plot(x, p, label=player)[0].get_color()
+        ax.fill_between(x, p, color=color, alpha=1 / len(stats['scores_dynamic']))
+    ax.set_xticks(bins)
+    ax.grid(True)
+    ax.legend()
 
 
 def show_position_distribution_plot(pyplot, stats):
@@ -180,11 +185,10 @@ def show_position_distribution_plot(pyplot, stats):
     min_position = min(min(v) for v in stats['positions_dynamic'].values())
     max_position = max(max(v) for v in stats['positions_dynamic'].values())
     bins = list(range(min_position, max_position + 2))
-    for player, values in stats['positions_dynamic'].items():
-        ax.hist(values, bins=bins, label=player, alpha=0.5)
-        ax.set_xticks(bins)
-        ax.grid(True)
-        ax.legend()
+    ax.hist(list(stats['positions_dynamic'].values()), bins=bins, label=list(stats['positions_dynamic'].keys()))
+    ax.set_xticks(bins)
+    ax.grid(True)
+    ax.legend()
 
 
 def show_place_distribution_plot(pyplot, stats):
@@ -194,11 +198,10 @@ def show_place_distribution_plot(pyplot, stats):
     min_place = min(min(v) for v in stats['places_dynamic'].values())
     max_place = max(max(v) for v in stats['places_dynamic'].values())
     bins = list(range(min_place, max_place + 2))
-    for player, values in stats['places_dynamic'].items():
-        ax.hist(values, bins=bins, label=player, alpha=0.5)
-        ax.set_xticks(bins)
-        ax.grid(True)
-        ax.legend()
+    ax.hist(list(stats['places_dynamic'].values()), bins=bins, label=list(stats['places_dynamic'].keys()))
+    ax.set_xticks(bins)
+    ax.grid(True)
+    ax.legend()
 
 
 def show_places_positions_plot(pyplot, stats, player):
@@ -243,7 +246,7 @@ def show_duration_distribution_plot(pyplot, stats):
     fig.canvas.set_window_title('duration_distribution')
     ax.set_title('duration_distribution')
     bins = numpy.linspace(0, max(stats['durations']), 50)
-    ax.hist(stats['durations'], bins=bins, alpha=0.5)
+    ax.hist(stats['durations'], bins=bins)
     ax.axvline(stats['mean_duration'], label=f"mean = {stats['mean_duration']}", color='r', linestyle='--')
     ax.axvline(stats['median_duration'], label=f"median = {stats['median_duration']}", color='g')
     ax.set_xticks(bins)
