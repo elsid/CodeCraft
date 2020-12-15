@@ -34,18 +34,21 @@ import itertools
 @click.option('--seed', default=None, type=int)
 @click.option('--config_path', default=None, type=click.Path(exists=True, dir_okay=False))
 @click.option('--visual', is_flag=False)
+@click.option('--sides', default=4, type=int)
 def main(**kwargs):
     run(**kwargs)
 
 
 def run(players, game_type, runner_bin_path, start_port, workers, max_runs, prefix, output_path,
-        verbose, timeout, seed, config_path, visual):
+        verbose, timeout, seed, config_path, visual, sides):
     players = tuple(parse_players(text=players, start_port=start_port))
     session = f"{prefix}.{game_type}.{format_players(players)}.{start_port}.{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     games_path = os.path.join(output_path, game_type, session)
     scheduler = Scheduler(workers_number=workers, ports_per_worker=len(players), verbose=verbose, timeout=timeout)
     scheduler.start()
-    players_permutations = list(itertools.permutations(players))
+    while len(players) < sides:
+        players += players
+    players_permutations = list(itertools.permutations(players, sides))
     for number in range(max_runs):
         if verbose:
             print(f'{max_runs - number - 1} tasks is left')
