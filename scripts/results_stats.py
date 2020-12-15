@@ -10,9 +10,9 @@ import operator
 import os.path
 import statistics
 import sys
+import termtables
 
 from collections import defaultdict, Counter
-from tabulate import tabulate
 
 
 def main():
@@ -24,15 +24,16 @@ def main():
 
 
 def print_stats(stats):
-    print(tabulate(
+    termtables.print(
         list(generate_stats_rows(stats)),
-        headers=('metric', 'value', '%'),
-    ))
-    print()
-    print(tabulate(
+        header=('metric', 'value', '%'),
+        style=termtables.styles.markdown,
+    )
+    termtables.print(
         list(generate_stats_per_player_rows(stats)),
-        headers=('metric', *stats['players'], *[f'{v}, %' for v in stats['players']], 'total'),
-    ))
+        header=('metric', *stats['players'], *[f'{v}, %' for v in stats['players']], 'total'),
+        style=termtables.styles.markdown,
+    )
 
 
 def generate_stats_rows(stats):
