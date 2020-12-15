@@ -13,7 +13,7 @@ use model::{
 #[cfg(feature = "enable_debug")]
 use model::Color;
 
-use crate::my_strategy::{index_to_position, is_entity_base, is_entity_unit, Map, position_to_index, Positionable, Range, Rect, Tile, Vec2i, visit_range, visit_reversed_shortest_path};
+use crate::my_strategy::{Config, index_to_position, is_entity_base, is_entity_unit, Map, position_to_index, Positionable, Range, Rect, Tile, Vec2i, visit_range, visit_reversed_shortest_path};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{debug, Vec2f};
 
@@ -41,6 +41,8 @@ pub struct World {
     protected_radius: RefCell<Option<i32>>,
     player_power: Vec<i32>,
     is_attacked_by_opponent: Vec<bool>,
+    last_player_activity: Vec<i32>,
+    config: Config,
     #[cfg(feature = "enable_debug")]
     player_score_time_series: Vec<Vec<i32>>,
     #[cfg(feature = "enable_debug")]
@@ -58,7 +60,7 @@ pub struct World {
 }
 
 impl World {
-    pub fn new(player_view: &PlayerView) -> Self {
+    pub fn new(player_view: &PlayerView, config: Config) -> Self {
         let mut entity_properties: Vec<EntityProperties> = std::iter::repeat(EntityProperties::default())
             .take(player_view.entity_properties.len())
             .collect();
@@ -104,6 +106,8 @@ impl World {
             protected_radius: RefCell::new(None),
             player_power: std::iter::repeat(0).take(player_view.players.len()).collect(),
             is_attacked_by_opponent: std::iter::repeat(false).take((player_view.map_size * player_view.map_size) as usize).collect(),
+            last_player_activity: std::iter::repeat(player_view.current_tick).take(player_view.players.len()).collect(),
+            config,
             #[cfg(feature = "enable_debug")]
             player_score_time_series: std::iter::repeat(Vec::new()).take(player_view.players.len()).collect(),
             #[cfg(feature = "enable_debug")]
@@ -123,6 +127,13 @@ impl World {
 
     pub fn update(&mut self, player_view: &PlayerView) {
         self.current_tick = player_view.current_tick;
+        if !self.players.is_empty() {
+            for i in 0..self.players.len() {
+                if player_view.players[i].score != self.players[i].score || player_view.players[i].resource != self.players[i].resource {
+                    self.last_player_activity[i] = player_view.current_tick;
+                }
+            }
+        }
         self.players = player_view.players.clone();
         self.map.borrow_mut().update_with_actual(
             player_view.my_id,
@@ -243,6 +254,10 @@ impl World {
 
     pub fn map_size(&self) -> i32 {
         self.map_size
+    }
+
+    pub fn fog_of_war(&self) -> bool {
+        self.fog_of_war
     }
 
     pub fn current_tick(&self) -> i32 {
@@ -514,6 +529,7 @@ impl World {
 
         debug.add_static_text(format!("Tick {}", self.current_tick));
         debug.add_static_text(format!("Players power: {:?}", (0..self.players.len()).map(|i| (self.players[i].id, self.player_power[i])).collect::<BTreeMap<_, _>>()));
+        debug.add_static_text(format!("Players last activity: {:?}", (0..self.players.len()).map(|i| (self.players[i].id, self.last_player_activity[i])).collect::<BTreeMap<_, _>>()));
         let allocated = self.allocated_resource();
         let requested = self.requested_resource();
         debug.add_static_text(format!("Resource: {} - {} a - {} r = {}", self.my_player().resource, allocated, requested, self.my_resource()));
@@ -733,6 +749,20 @@ impl World {
         }
 
         None
+    }
+
+    pub fn is_player_alive(&self, player_id: i32) -> bool {
+        self.current_tick - self.last_player_activity[(player_id - 1) as usize] < self.config.min_player_inactive_ticks
+    }
+
+    pub fn get_player_position(&self, player_id: i32) -> Vec2i {
+        match player_id {
+            1 => Vec2i::both(10),
+            2 => Vec2i::both(self.map_size - 10),
+            3 => Vec2i::new(self.map_size - 10, 10),
+            4 => Vec2i::new(10, self.map_size - 10),
+            _ => Vec2i::both(self.map_size / 2),
+        }
     }
 }
 
