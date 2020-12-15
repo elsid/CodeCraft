@@ -82,7 +82,7 @@ impl Bot {
             entity_targets: HashMap::new(),
             entity_planners: HashMap::new(),
             rng: RefCell::new(StdRng::seed_from_u64(seed)),
-            world: World::new(player_view),
+            world: World::new(player_view, config.clone()),
             config,
         }
     }
@@ -345,6 +345,12 @@ impl Bot {
             if let Some(target) = self.world.opponent_entities()
                 .min_by_key(|v| (v.center(world.get_entity_properties(&v.entity_type).size).distance(position), v.id)) {
                 target.position()
+            } else if self.world.fog_of_war() {
+                self.world.players().iter()
+                    .filter(|player| player.id != self.world.my_id() && self.world.is_player_alive(player.id))
+                    .min_by_key(|player| (self.world.get_player_position(player.id).distance(group.position()) + player.score))
+                    .map(|player| self.world.get_player_position(player.id))
+                    .unwrap_or(position)
             } else {
                 position
             }

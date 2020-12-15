@@ -1,5 +1,6 @@
 {
   "entity_plan_min_depth": 1,
   "entity_plan_max_depth": 4,
-  "entity_plan_max_iterations": 200
+  "entity_plan_max_iterations": 200,
+  "min_player_inactive_ticks": 5
 }
