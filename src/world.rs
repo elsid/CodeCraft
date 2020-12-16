@@ -124,9 +124,7 @@ impl World {
     pub fn update(&mut self, player_view: &PlayerView) {
         self.current_tick = player_view.current_tick;
         self.players = player_view.players.clone();
-        self.players.sort_by_key(|v| v.id);
         self.entities = player_view.entities.clone();
-        self.entities.sort_by_key(|v| v.id);
         self.entities_by_id = self.entities.iter().enumerate().map(|(n, v)| (v.id, n)).collect();
         for count in self.my_entities_count.iter_mut() {
             *count = 0;
@@ -476,7 +474,7 @@ impl World {
         use std::collections::{btree_map, BTreeMap};
 
         debug.add_static_text(format!("Tick {}", self.current_tick));
-        debug.add_static_text(format!("Players power: {:?}", self.player_power.iter().enumerate().map(|(i, v)| (self.players[i].id, *v)).collect::<BTreeMap<i32, i32>>()));
+        debug.add_static_text(format!("Players power: {:?}", (0..self.players.len()).map(|i| (self.players[i].id, self.player_power[i])).collect::<BTreeMap<_, _>>()));
         let allocated = self.allocated_resource();
         let requested = self.requested_resource();
         debug.add_static_text(format!("Resource: {} - {} a - {} r = {}", self.my_player().resource, allocated, requested, self.my_resource()));
