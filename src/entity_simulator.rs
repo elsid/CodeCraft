@@ -293,6 +293,7 @@ impl EntitySimulator {
         let src_index = position_to_index(src - self.shift, size);
 
         costs[src_index] = 0;
+        discovered.reserve(2 * size);
         discovered.push((-target_bounds.distance_to_position(src), src_index));
 
         const EDGES: &[Vec2i] = &[
