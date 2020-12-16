@@ -38,7 +38,7 @@ pub struct World {
     requested_resource: RefCell<i32>,
     allocated_resource: RefCell<i32>,
     allocated_population: RefCell<i32>,
-    protected_radius: RefCell<Option<i32>>,
+    protected_radius: i32,
     player_power: Vec<i32>,
     is_attacked_by_opponent: Vec<bool>,
     last_player_activity: Vec<i32>,
@@ -103,7 +103,7 @@ impl World {
             requested_resource: RefCell::new(0),
             allocated_resource: RefCell::new(0),
             allocated_population: RefCell::new(0),
-            protected_radius: RefCell::new(None),
+            protected_radius: 0,
             player_power: std::iter::repeat(0).take(player_view.players.len()).collect(),
             is_attacked_by_opponent: std::iter::repeat(false).take((player_view.map_size * player_view.map_size) as usize).collect(),
             last_player_activity: std::iter::repeat(player_view.current_tick).take(player_view.players.len()).collect(),
@@ -187,7 +187,16 @@ impl World {
         *self.base_size.borrow_mut() = None;
         *self.allocated_resource.borrow_mut() = 0;
         *self.allocated_population.borrow_mut() = 0;
-        *self.protected_radius.borrow_mut() = None;
+        self.protected_radius = self.my_entities()
+            .filter(|entity| is_protected_entity_type(&entity.entity_type))
+            .map(|entity| {
+                let properties = &self.get_entity_properties(&entity.entity_type);
+                entity.center(properties.size).distance(self.start_position)
+                    + properties.size / 2
+                    + properties.sight_range
+            })
+            .max()
+            .unwrap_or(1);
         for i in 0..self.players.len() {
             let player_id = self.players[i].id;
             self.player_power[i] = self.entities.iter()
@@ -451,7 +460,7 @@ impl World {
         if fit(&map, start) {
             return Some(start);
         }
-        for radius in 1..self.get_protected_radius() {
+        for radius in 1..self.protected_radius() {
             let result = map.find_on_square_border(
                 start - Vec2i::both(radius),
                 2 * radius + 1,
@@ -617,25 +626,12 @@ impl World {
         self.is_attacked_by_opponent[position_to_index(position, self.map_size as usize)]
     }
 
-    pub fn get_protected_radius(&self) -> i32 {
-        if let Some(v) = *self.protected_radius.borrow() {
-            return v;
-        }
-        let result = self.my_entities()
-            .filter(|v| is_protected_entity_type(&v.entity_type))
-            .map(|entity| {
-                let properties = &self.get_entity_properties(&entity.entity_type);
-                entity.center(properties.size).distance(self.start_position)
-                    + properties.size / 2
-                    + properties.sight_range
-            })
-            .max();
-        *self.protected_radius.borrow_mut() = result;
-        result.unwrap_or(0)
+    pub fn protected_radius(&self) -> i32 {
+        self.protected_radius
     }
 
     pub fn is_inside_protected_perimeter(&self, position: Vec2i) -> bool {
-        position.distance(self.start_position) <= self.get_protected_radius()
+        position.distance(self.start_position) <= self.protected_radius()
     }
 
     pub fn has_active_base_for(&self, entity_type: &EntityType) -> bool {
