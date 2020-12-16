@@ -335,6 +335,10 @@ impl World {
         self.current_tick
     }
 
+    pub fn max_tick_count(&self) -> i32 {
+        self.max_tick_count
+    }
+
     pub fn get_entity_properties(&self, entity_type: &EntityType) -> &EntityProperties {
         &self.entity_properties[entity_type.clone() as usize]
     }

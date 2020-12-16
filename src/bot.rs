@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::collections::hash_map;
 use std::collections::HashMap;
+use std::time::Instant;
 
 use model::{
     Action,
@@ -55,7 +56,12 @@ impl Drop for Bot {
             ).unwrap(),
             &stats,
         ).unwrap();
-        println!("[{}] {} {} {}", self.world.current_tick(), stats.entity_planner_iterations, stats.find_hidden_path_calls, stats.path_updates);
+        println!(
+            "[{}] {} {} {} {} {:?} {:?} {} {} {} {}", self.world.current_tick(), stats.entity_planner_iterations,
+            stats.find_hidden_path_calls, stats.path_updates, stats.last_tick_entity_planner_iterations,
+            stats.last_tick_duration, stats.max_tick_duration, stats.max_tick_duration_entity_planner_iterations,
+            stats.last_entities_to_plan, stats.max_entities_to_plan, stats.max_entity_planner_iterations_per_entity,
+        );
     }
 }
 
@@ -88,11 +94,13 @@ impl Bot {
     }
 
     pub fn get_action(&mut self, player_view: &PlayerView) -> Action {
+        let start = Instant::now();
         self.update(player_view);
         let result = self.entity_actions();
         for (entity_id, entity_action) in result.iter() {
             self.actions.insert(*entity_id, entity_action.clone());
         }
+        self.stats.borrow_mut().set_last_tick_duration(Instant::now() - start);
         Action { entity_actions: result }
     }
 
@@ -114,6 +122,7 @@ impl Bot {
     }
 
     fn update(&mut self, player_view: &PlayerView) {
+        self.stats.borrow_mut().reset_last_tick_entity_planner_iterations();
         self.world.update(player_view, &mut *self.stats.borrow_mut());
         self.update_roles();
         self.update_groups();
@@ -431,32 +440,44 @@ impl Bot {
         let mut plans = Vec::new();
         let mut simulators = Vec::new();
         let mut rng = self.rng.borrow_mut();
-        for entity in self.world.my_units() {
-            if !matches!(self.roles[&entity.id], Role::GroupMember { .. }) {
-                continue;
-            }
-            let properties = self.world.get_entity_properties(&entity.entity_type);
-            let in_battle = properties.attack.as_ref()
-                .map(|attack| {
-                    self.world.opponent_entities()
-                        .any(|opponent| {
-                            if matches!(opponent.entity_type, EntityType::BuilderUnit) {
-                                return false;
-                            }
-                            let opponent_properties = self.world.get_entity_properties(&opponent.entity_type);
-                            if let Some(opponent_attack) = opponent_properties.attack.as_ref() {
-                                let bounds = Rect::new(opponent.position(), opponent.position() + Vec2i::both(opponent_properties.size));
-                                let distance = bounds.distance_to_position(entity.position());
-                                distance <= opponent_attack.attack_range.max(attack.attack_range) + 1
-                            } else {
-                                false
-                            }
-                        })
-                })
-                .unwrap_or(false);
-            if !in_battle {
-                continue;
-            }
+        let mut to_plan: Vec<&Entity> = self.world.my_units()
+            .filter(|entity| {
+                if !matches!(self.roles[&entity.id], Role::GroupMember { .. }) {
+                    return false;
+                }
+                let properties = self.world.get_entity_properties(&entity.entity_type);
+                properties.attack.as_ref()
+                    .map(|attack| {
+                        self.world.opponent_entities()
+                            .any(|opponent| {
+                                if matches!(opponent.entity_type, EntityType::BuilderUnit) {
+                                    return false;
+                                }
+                                let opponent_properties = self.world.get_entity_properties(&opponent.entity_type);
+                                if let Some(opponent_attack) = opponent_properties.attack.as_ref() {
+                                    let bounds = Rect::new(opponent.position(), opponent.position() + Vec2i::both(opponent_properties.size));
+                                    let distance = bounds.distance_to_position(entity.position());
+                                    distance <= opponent_attack.attack_range.max(attack.attack_range) + 1
+                                } else {
+                                    false
+                                }
+                            })
+                    })
+                    .unwrap_or(false)
+            })
+            .collect();
+        self.stats.borrow_mut().add_entities_to_plan(to_plan.len());
+        if to_plan.is_empty() {
+            return;
+        }
+        let entity_plan_max_iterations = ((
+            (self.config.entity_plan_max_total_iterations - self.stats.borrow().entity_planner_iterations()) as f32
+            / (self.world.max_tick_count() - self.world.current_tick()) as f32
+            / (2 * to_plan.len() - 1) as f32
+        ).round().max(1.0) as usize)
+            .min(self.config.entity_plan_max_iterations)
+            .min(self.config.entity_plan_max_iterations_per_tick / (2 * to_plan.len() - 1));
+        for entity in to_plan.iter() {
             let config = &self.config;
             let planner = self.entity_planners.entry(entity.id)
                 .or_insert_with(|| {
@@ -467,6 +488,7 @@ impl Bot {
                         config.entity_plan_max_depth,
                     )
                 });
+            let properties = self.world.get_entity_properties(&entity.entity_type);
             let map_size = 2 * properties.sight_range;
             let shift = (entity.position() - Vec2i::both(map_size / 2))
                 .lowest(Vec2i::both(self.world.map_size() - map_size))
@@ -476,7 +498,7 @@ impl Bot {
                 self.world.map_size(),
                 simulator.clone(),
                 self.world.entity_properties(),
-                self.config.entity_plan_max_iterations,
+                entity_plan_max_iterations,
                 &Vec::new(),
                 &mut *rng,
                 &mut *self.stats.borrow_mut(),
@@ -493,7 +515,7 @@ impl Bot {
                 self.world.map_size(),
                 simulators[i].clone(),
                 self.world.entity_properties(),
-                self.config.entity_plan_max_iterations,
+                entity_plan_max_iterations,
                 &plans[0..i],
                 &mut *rng,
                 &mut *self.stats.borrow_mut(),
