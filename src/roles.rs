@@ -76,7 +76,7 @@ fn harvest_resource(entity: &Entity, world: &World, resource_id: i32) -> EntityA
             Some(AttackAction {
                 target: Some(resource_id),
                 auto_attack: Some(AutoAttack {
-                    pathfind_range: 2 * builder_properties.sight_range,
+                    pathfind_range: 2 * world.map_size(),
                     valid_targets: vec![EntityType::BuilderUnit, EntityType::Resource],
                 }),
             })
