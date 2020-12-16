@@ -435,9 +435,15 @@ impl World {
                 locked || !matches!(tile, Tile::Empty)
             }).is_none();
             let has_space_around = map.find_on_square_border(position - Vec2i::both(1), size + 2, |_, tile, locked| {
-                locked || (!house && !matches!(tile, Tile::Empty))
-                    || (house && !matches!(tile, Tile::Empty) && !matches!(tile, Tile::Outside))
-                    || matches!(self.get_tile_entity_type(tile), Some(EntityType::Resource))
+                let entity_type = self.get_tile_entity_type(tile);
+                locked
+                    || matches!(entity_type, Some(EntityType::BuilderBase))
+                    || matches!(entity_type, Some(EntityType::MeleeBase))
+                    || matches!(entity_type, Some(EntityType::RangedBase))
+                    || matches!(entity_type, Some(EntityType::House))
+                    || matches!(entity_type, Some(EntityType::Turret))
+                    || matches!(entity_type, Some(EntityType::Wall))
+                    || (!house && matches!(tile, Tile::Outside))
             }).is_none();
             has_place_for_entity && has_space_around
         };
