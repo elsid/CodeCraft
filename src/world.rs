@@ -64,6 +64,10 @@ pub struct World {
     predicted_map_resource_time_series: Vec<i32>,
     #[cfg(feature = "enable_debug")]
     total_map_resource_time_series: Vec<i32>,
+    #[cfg(feature = "enable_debug")]
+    builders_time_series: Vec<i32>,
+    #[cfg(feature = "enable_debug")]
+    required_builders_time_series: Vec<i32>,
 }
 
 impl World {
@@ -138,6 +142,10 @@ impl World {
             predicted_map_resource_time_series: Vec::new(),
             #[cfg(feature = "enable_debug")]
             total_map_resource_time_series: Vec::new(),
+            #[cfg(feature = "enable_debug")]
+            builders_time_series: Vec::new(),
+            #[cfg(feature = "enable_debug")]
+            required_builders_time_series: Vec::new(),
         }
     }
 
@@ -317,6 +325,10 @@ impl World {
             self.predicted_map_resource_time_series.push(self.predicted_map_resource as i32);
         #[cfg(feature = "enable_debug")]
             self.total_map_resource_time_series.push(self.known_map_resource + self.predicted_map_resource as i32);
+        #[cfg(feature = "enable_debug")]
+            self.builders_time_series.push(self.get_my_entity_count_of(&EntityType::BuilderUnit) as i32);
+        #[cfg(feature = "enable_debug")]
+            self.required_builders_time_series.push(self.get_max_required_builders_count() as i32);
     }
 
     pub fn my_id(&self) -> i32 {
@@ -679,6 +691,14 @@ impl World {
                 (&self.map_resource_time_series, Color { a: 1.0, r: 0.0, g: 1.0, b: 0.0 }),
                 (&self.predicted_map_resource_time_series, Color { a: 1.0, r: 0.0, g: 0.0, b: 1.0 }),
                 (&self.total_map_resource_time_series, Color { a: 1.0, r: 1.0, g: 0.0, b: 0.0 }),
+            ].iter().cloned(),
+        );
+        debug.add_time_series_i32(
+            5,
+            String::from("Builders"),
+            [
+                (&self.builders_time_series, Color { a: 1.0, r: 0.0, g: 1.0, b: 0.0 }),
+                (&self.required_builders_time_series, Color { a: 1.0, r: 0.0, g: 0.0, b: 1.0 }),
             ].iter().cloned(),
         );
     }
