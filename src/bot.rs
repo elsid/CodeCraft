@@ -438,10 +438,7 @@ impl Bot {
         for planner in self.entity_planners.values_mut() {
             planner.reset();
         }
-        let mut plans = Vec::new();
-        let mut simulators = Vec::new();
-        let mut rng = self.rng.borrow_mut();
-        let mut to_plan: Vec<&Entity> = self.world.my_units()
+        let mut units: Vec<&Entity> = self.world.my_units()
             .filter(|entity| {
                 if !matches!(self.roles[&entity.id], Role::GroupMember { .. }) {
                     return false;
@@ -467,28 +464,12 @@ impl Bot {
                     .unwrap_or(false)
             })
             .collect();
-        self.stats.borrow_mut().add_entities_to_plan(to_plan.len());
-        if to_plan.is_empty() {
+        self.stats.borrow_mut().add_entities_to_plan(units.len());
+        if units.is_empty() {
             return;
         }
-        let entity_plan_max_iterations = ((
-            (self.config.entity_plan_max_total_iterations - self.stats.borrow().entity_planner_iterations()) as f32
-            / (self.world.max_tick_count() - self.world.current_tick()) as f32
-            / (2 * to_plan.len() - 1) as f32
-        ).round().max(1.0) as usize)
-            .min(self.config.entity_plan_max_iterations)
-            .min(self.config.entity_plan_max_iterations_per_tick / (2 * to_plan.len() - 1));
-        for entity in to_plan.iter() {
-            let config = &self.config;
-            let planner = self.entity_planners.entry(entity.id)
-                .or_insert_with(|| {
-                    EntityPlanner::new(
-                        entity.player_id.unwrap(),
-                        entity.id,
-                        config.entity_plan_min_depth,
-                        config.entity_plan_max_depth,
-                    )
-                });
+        let mut simulators = Vec::new();
+        for entity in units.iter() {
             let properties = self.world.get_entity_properties(&entity.entity_type);
             let map_size = 2 * properties.sight_range;
             let shift = (entity.position() - Vec2i::both(map_size / 2))
@@ -496,9 +477,31 @@ impl Bot {
                 .highest(Vec2i::zero());
             let simulator = EntitySimulator::new(shift, map_size as usize, &self.world);
             self.stats.borrow_mut().add_entity_simulator_entities(simulator.entities().len());
+            simulators.push((entity.id, simulator));
+        }
+        let entity_plan_max_iterations = ((
+            (self.config.entity_plan_max_total_iterations - self.stats.borrow().entity_planner_iterations()) as f32
+            / (self.world.max_tick_count() - self.world.current_tick()) as f32
+            / (2 * units.len() - 1) as f32
+        ).round().max(1.0) as usize)
+            .min(self.config.entity_plan_max_iterations)
+            .min(self.config.entity_plan_max_iterations_per_tick / (2 * units.len() - 1));
+        let mut plans = Vec::new();
+        let mut rng = self.rng.borrow_mut();
+        for i in 0..units.len() {
+            let config = &self.config;
+            let planner = self.entity_planners.entry(units[i].id)
+                .or_insert_with(|| {
+                    EntityPlanner::new(
+                        units[i].player_id.unwrap(),
+                        units[i].id,
+                        config.entity_plan_min_depth,
+                        config.entity_plan_max_depth,
+                    )
+                });
             planner.update(
                 self.world.map_size(),
-                simulator.clone(),
+                simulators[i].1.clone(),
                 self.world.entity_properties(),
                 entity_plan_max_iterations,
                 &Vec::new(),
@@ -506,8 +509,7 @@ impl Bot {
                 &mut *self.stats.borrow_mut(),
             );
             if !planner.plan().transitions.is_empty() {
-                simulators.push(simulator);
-                plans.push((entity.id, planner.plan().clone()));
+                plans.push((units[i].id, planner.plan().clone()));
             }
         }
         plans.sort_by_key(|(entity_id, plan)| (-plan.score, *entity_id));
@@ -515,7 +517,7 @@ impl Bot {
             let planner = self.entity_planners.get_mut(&plans[i].0).unwrap();
             planner.update(
                 self.world.map_size(),
-                simulators[i].clone(),
+                simulators.iter().find(|(entity_id, _)| *entity_id == plans[i].0).unwrap().1.clone(),
                 self.world.entity_properties(),
                 entity_plan_max_iterations,
                 &plans[0..i],
