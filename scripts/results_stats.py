@@ -89,6 +89,7 @@ def show_stats(stats, player):
     show_place_distribution_plot(pyplot, stats)
     show_seed_distribution_plot(pyplot, stats)
     show_duration_distribution_plot(pyplot, stats)
+    show_max_tick_duration_distribution_plot(pyplot, stats, player)
 
     show_places_positions_plot(pyplot, stats, player)
 
@@ -255,6 +256,26 @@ def show_duration_distribution_plot(pyplot, stats):
     ax.legend()
 
 
+def show_max_tick_duration_distribution_plot(pyplot, stats, player):
+    if player not in stats['max_tick_duration']:
+        return
+    values = stats['max_tick_duration'][player]
+    if not values:
+        return
+    fig, ax = pyplot.subplots()
+    fig.canvas.set_window_title('max_tick_duration')
+    ax.set_title('max_tick_duration')
+    bins = numpy.linspace(0, max(values), 50)
+    ax.hist(values, bins=bins)
+    mean = statistics.mean(values)
+    ax.axvline(mean, label=f"mean = {mean}", color='r', linestyle='--')
+    median = statistics.median(values)
+    ax.axvline(median, label=f"median = {median}", color='g')
+    ax.set_xticks(bins)
+    ax.grid(True)
+    ax.legend()
+
+
 def get_stats(games):
     draws = 0
     zero_draws = 0
@@ -274,7 +295,7 @@ def get_stats(games):
     wins_dynamic = defaultdict(list)
     losses_dynamic = defaultdict(list)
     place_score = Counter()
-    entity_planner_iterations = defaultdict(list)
+    bot_stats = defaultdict(lambda: defaultdict(list))
     for number, game in enumerate(games):
         fails += game['code'] != 0
         durations.append(game['duration'])
@@ -313,8 +334,12 @@ def get_stats(games):
             if len(losses_dynamic[k]) < number + 1:
                 losses_dynamic[k].append(0)
         seeds.add(game['seed'])
-        for k, v in game.get('stats', dict()).items():
-            entity_planner_iterations[k].append(int(v.get('entity_planner_iterations', 0)))
+        for player, data in game.get('stats', dict()).items():
+            for k, v in data.items():
+                if isinstance(v, dict):
+                    bot_stats[k][player].append(v['secs'] + v['nanos'] / 10**9)
+                else:
+                    bot_stats[k][player].append(v)
     for k in scores.keys():
         scores[k] = numpy.array(scores[k])
         places_dynamic[k] = numpy.array(places_dynamic[k])
@@ -354,10 +379,7 @@ def get_stats(games):
         positions_dynamic=positions_dynamic,
         seeds=numpy.array(sorted(seeds)),
         place_score=place_score,
-        min_entity_planner_iterations={k: min(v) for k, v in entity_planner_iterations.items()},
-        max_entity_planner_iterations={k: max(v) for k, v in entity_planner_iterations.items()},
-        median_entity_planner_iterations={k: statistics.median(v) for k, v in entity_planner_iterations.items()},
-        mean_entity_planner_iterations={k: statistics.mean(v) for k, v in entity_planner_iterations.items()},
+        **bot_stats,
     )
 
 
