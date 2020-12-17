@@ -603,3 +603,20 @@ impl ClearAreaTask {
         TaskStatus::Wait
     }
 }
+
+pub fn assign_scouts(world: &World, roles: &mut HashMap<i32, Role>) {
+    if world.resources().count() > 0 || world.current_tick() > 100 {
+        for role in roles.values_mut() {
+            if matches!(role, Role::Scout) {
+                *role = Role::None;
+            }
+        }
+        return;
+    }
+    roles.iter_mut()
+        .filter(|(entity_id, role)| {
+            matches!(role, Role::Harvester { .. } | Role::None)
+                && world.get_entity_properties(&world.get_entity(**entity_id).entity_type).can_move
+        })
+        .for_each(|(_, role)| *role = Role::Scout);
+}

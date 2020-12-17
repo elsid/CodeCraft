@@ -17,7 +17,7 @@ use rand::rngs::StdRng;
 
 #[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
-use crate::my_strategy::{build_builders, Config, EntityPlan, EntityPlanner, EntitySimulator, Group, GroupState, harvest_resources, is_active_entity_type, is_protected_entity_type, Positionable, Range, Rect, repair_buildings, Role, Stats, Task, TaskManager, Tile, Vec2i, World};
+use crate::my_strategy::{assign_scouts, build_builders, Config, EntityPlan, EntityPlanner, EntitySimulator, Group, GroupState, harvest_resources, is_active_entity_type, is_protected_entity_type, Positionable, Range, Rect, repair_buildings, Role, Stats, Task, TaskManager, Tile, Vec2i, World};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
@@ -175,6 +175,9 @@ impl Bot {
             self.try_build_builder_base();
         }
         self.tasks.update(&self.world, &mut self.roles, &mut self.groups);
+        if self.world.fog_of_war() {
+            assign_scouts(&self.world, &mut self.roles);
+        }
         harvest_resources(&self.world, &mut self.roles);
         repair_buildings(&self.world, &mut self.roles);
         if matches!(self.opening, OpeningType::None) {
