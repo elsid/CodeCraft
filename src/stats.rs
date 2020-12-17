@@ -6,78 +6,58 @@ use serde::Serialize;
 #[derive(Debug)]
 #[cfg_attr(feature = "write_stats", derive(Serialize))]
 pub struct StatsResult {
-    pub entity_planner_iterations: usize,
+    pub total_plan_cost: usize,
     pub find_hidden_path_calls: usize,
-    pub path_updates: usize,
-    pub last_tick_entity_planner_iterations: usize,
+    pub reachability_updates: usize,
     pub last_tick_duration: Duration,
     pub max_tick_duration: Duration,
-    pub max_tick_duration_entity_planner_iterations: usize,
-    pub last_entities_to_plan: usize,
-    pub max_entities_to_plan: usize,
-    pub max_entity_planner_iterations_per_entity: usize,
-    pub last_entity_simulator_entities: usize,
-    pub max_tick_duration_entity_simulator_entities: usize,
+    pub last_tick_plan_cost: usize,
+    pub max_tick_plan_cost: usize,
 }
 
 #[derive(Default)]
 pub struct Stats {
-    entity_planner_iterations: usize,
+    total_plan_cost: usize,
     find_hidden_path_calls: usize,
     reachability_updates: usize,
-    last_tick_entity_planner_iterations: usize,
     last_tick_duration: Duration,
     max_tick_duration: Duration,
-    max_tick_duration_entity_planner_iterations: usize,
-    last_entities_to_plan: usize,
-    max_tick_duration_entities_to_plan: usize,
-    max_tick_duration_entity_planner_iterations_per_entity: usize,
-    last_entity_simulator_entities: usize,
-    max_tick_duration_entity_simulator_entities: usize,
+    last_tick_plan_cost: usize,
+    max_tick_plan_cost: usize,
 }
 
 impl Stats {
     pub fn new() -> Self {
         Self {
-            entity_planner_iterations: 0,
+            total_plan_cost: 0,
             find_hidden_path_calls: 0,
             reachability_updates: 0,
-            last_tick_entity_planner_iterations: 0,
             last_tick_duration: Duration::new(0, 0),
             max_tick_duration: Duration::new(0, 0),
-            max_tick_duration_entity_planner_iterations: 0,
-            last_entities_to_plan: 0,
-            max_tick_duration_entities_to_plan: 0,
-            max_tick_duration_entity_planner_iterations_per_entity: 0,
-            last_entity_simulator_entities: 0,
-            max_tick_duration_entity_simulator_entities: 0,
+            last_tick_plan_cost: 0,
+            max_tick_plan_cost: 0,
         }
     }
 
     pub fn get_result(&self) -> StatsResult {
         StatsResult {
-            entity_planner_iterations: self.entity_planner_iterations,
+            total_plan_cost: self.total_plan_cost,
             find_hidden_path_calls: self.find_hidden_path_calls,
-            path_updates: self.reachability_updates,
-            last_tick_entity_planner_iterations: self.last_tick_entity_planner_iterations,
+            reachability_updates: self.reachability_updates,
             last_tick_duration: self.last_tick_duration,
             max_tick_duration: self.max_tick_duration,
-            max_tick_duration_entity_planner_iterations: self.max_tick_duration_entity_planner_iterations,
-            last_entities_to_plan: self.last_entities_to_plan,
-            max_entities_to_plan: self.max_tick_duration_entities_to_plan,
-            max_entity_planner_iterations_per_entity: self.max_tick_duration_entity_planner_iterations_per_entity,
-            last_entity_simulator_entities: self.last_entity_simulator_entities,
-            max_tick_duration_entity_simulator_entities: self.max_tick_duration_entity_simulator_entities,
+            last_tick_plan_cost: self.last_tick_plan_cost,
+            max_tick_plan_cost: self.max_tick_plan_cost,
         }
     }
 
-    pub fn entity_planner_iterations(&self) -> usize {
-        self.entity_planner_iterations
+    pub fn total_plan_cost(&self) -> usize {
+        self.total_plan_cost
     }
 
-    pub fn add_entity_planner_iterations(&mut self, number: usize) {
-        self.entity_planner_iterations += number;
-        self.last_tick_entity_planner_iterations += number;
+    pub fn add_plan_cost(&mut self, number: usize) {
+        self.total_plan_cost += number;
+        self.last_tick_plan_cost = number;
     }
 
     pub fn add_find_hidden_path_calls(&mut self, number: usize) {
@@ -88,29 +68,11 @@ impl Stats {
         self.reachability_updates += number;
     }
 
-    pub fn reset_last_tick_entity_planner_iterations(&mut self) {
-        self.last_tick_entity_planner_iterations = 0;
-    }
-
     pub fn set_last_tick_duration(&mut self, value: Duration) {
         self.last_tick_duration = value;
         if self.max_tick_duration < value {
             self.max_tick_duration = value;
-            self.max_tick_duration_entity_planner_iterations = self.last_tick_entity_planner_iterations;
-            if self.last_entities_to_plan > 0 {
-                self.max_tick_duration_entity_planner_iterations_per_entity = self.last_tick_entity_planner_iterations / self.last_entities_to_plan;
-                self.max_tick_duration_entities_to_plan = self.last_entities_to_plan;
-                self.max_tick_duration_entity_simulator_entities = self.last_entity_simulator_entities;
-            }
+            self.max_tick_plan_cost = self.last_tick_plan_cost;
         }
-        self.last_entity_simulator_entities = 0;
-    }
-
-    pub fn add_entities_to_plan(&mut self, value: usize) {
-        self.last_entities_to_plan = value;
-    }
-
-    pub fn add_entity_simulator_entities(&mut self, value: usize) {
-        self.last_entity_simulator_entities += value;
     }
 }

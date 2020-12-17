@@ -57,11 +57,10 @@ impl Drop for Bot {
             &stats,
         ).unwrap();
         println!(
-            "[{}] {} {} {} {} {:?} {:?} {} {} {} {} {} {}", self.world.current_tick(), stats.entity_planner_iterations,
-            stats.find_hidden_path_calls, stats.path_updates, stats.last_tick_entity_planner_iterations,
-            stats.last_tick_duration, stats.max_tick_duration, stats.max_tick_duration_entity_planner_iterations,
-            stats.last_entities_to_plan, stats.max_entities_to_plan, stats.max_entity_planner_iterations_per_entity,
-            stats.last_entity_simulator_entities, stats.max_tick_duration_entity_simulator_entities,
+            "[{}] {} {} {} {:?} {:?} {} {}", self.world.current_tick(),
+            stats.total_plan_cost, stats.find_hidden_path_calls, stats.reachability_updates,
+            stats.last_tick_duration, stats.max_tick_duration, stats.last_tick_plan_cost,
+            stats.max_tick_plan_cost
         );
     }
 }
@@ -123,7 +122,6 @@ impl Bot {
     }
 
     fn update(&mut self, player_view: &PlayerView) {
-        self.stats.borrow_mut().reset_last_tick_entity_planner_iterations();
         self.world.update(player_view, &mut *self.stats.borrow_mut());
         self.update_roles();
         self.update_groups();
@@ -438,7 +436,7 @@ impl Bot {
         for planner in self.entity_planners.values_mut() {
             planner.reset();
         }
-        let mut units: Vec<&Entity> = self.world.my_units()
+        let units: Vec<&Entity> = self.world.my_units()
             .filter(|entity| {
                 if !matches!(self.roles[&entity.id], Role::GroupMember { .. }) {
                     return false;
@@ -464,7 +462,6 @@ impl Bot {
                     .unwrap_or(false)
             })
             .collect();
-        self.stats.borrow_mut().add_entities_to_plan(units.len());
         if units.is_empty() {
             return;
         }
@@ -482,23 +479,19 @@ impl Bot {
                 .count();
             simulators.push((entity.id, simulator));
         }
-        self.stats.borrow_mut().add_entity_simulator_entities(simulated_entities);
         let simulated_entities_per_plan = simulated_entities as f32 / units.len() as f32;
-        let entity_plan_max_iterations = (
-            self.config.entity_plan_max_active_simulated_entities_per_iteration as f32
-                * (self.config.entity_plan_max_total_iterations - self.stats.borrow().entity_planner_iterations()) as f32
+        let estimated_iteration_cost = 2.0 * simulated_entities as f32 - simulated_entities_per_plan;
+        let entity_plan_max_transitions = (
+            (self.config.entity_plan_max_total_cost - self.stats.borrow().total_plan_cost()) as f32
                 / (self.world.max_tick_count() - self.world.current_tick()) as f32
-                / (2.0 * simulated_entities as f32 - simulated_entities_per_plan)
-        ).min(self.config.entity_plan_max_iterations as f32)
-            .min(
-                self.config.entity_plan_max_iterations_per_tick as f32
-                    * self.config.entity_plan_max_active_simulated_entities_per_iteration as f32
-                    / (2.0 * simulated_entities as f32 - simulated_entities_per_plan)
-            )
+                / estimated_iteration_cost
+        ).min(self.config.entity_plan_max_transitions as f32)
+            .min(self.config.entity_plan_max_cost_per_tick as f32 / estimated_iteration_cost)
             .max(1.0)
             .round() as usize;
         let mut plans = Vec::new();
         let mut rng = self.rng.borrow_mut();
+        let mut plan_cost = 0;
         for i in 0..units.len() {
             let config = &self.config;
             let planner = self.entity_planners.entry(units[i].id)
@@ -510,15 +503,18 @@ impl Bot {
                         config.entity_plan_max_depth,
                     )
                 });
-            let iterations = planner.update(
+            let transitions = planner.update(
                 self.world.map_size(),
                 simulators[i].1.clone(),
                 self.world.entity_properties(),
-                entity_plan_max_iterations,
+                entity_plan_max_transitions,
                 &Vec::new(),
                 &mut *rng,
             );
-            self.stats.borrow_mut().add_entity_planner_iterations(iterations);
+            let active_entities = simulators[i].1.entities().iter()
+                .filter(|entity| is_active_entity_type(&entity.entity_type, world.entity_properties()))
+                .count();
+            plan_cost += transitions * active_entities;
             if !planner.plan().transitions.is_empty() {
                 plans.push((units[i].id, planner.plan().clone()));
             }
@@ -526,19 +522,24 @@ impl Bot {
         plans.sort_by_key(|(entity_id, plan)| (-plan.score, *entity_id));
         for i in 1..plans.len() {
             let planner = self.entity_planners.get_mut(&plans[i].0).unwrap();
-            let iterations = planner.update(
+            let simulator = &simulators.iter().find(|(entity_id, _)| *entity_id == plans[i].0).unwrap().1;
+            let transitions = planner.update(
                 self.world.map_size(),
-                simulators.iter().find(|(entity_id, _)| *entity_id == plans[i].0).unwrap().1.clone(),
+                simulator.clone(),
                 self.world.entity_properties(),
-                entity_plan_max_iterations,
+                entity_plan_max_transitions,
                 &plans[0..i],
                 &mut *rng,
             );
-            self.stats.borrow_mut().add_entity_planner_iterations(iterations);
+            let active_entities = simulator.entities().iter()
+                .filter(|entity| is_active_entity_type(&entity.entity_type, world.entity_properties()))
+                .count();
+            plan_cost += transitions * active_entities;
             if !planner.plan().transitions.is_empty() {
                 plans[i].1 = planner.plan().clone();
             }
         }
+        self.stats.borrow_mut().add_plan_cost(plan_cost);
     }
 
     #[cfg(feature = "enable_debug")]

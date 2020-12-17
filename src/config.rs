@@ -9,10 +9,9 @@ use serde::Serialize;
 pub struct Config {
     pub entity_plan_min_depth: usize,
     pub entity_plan_max_depth: usize,
-    pub entity_plan_max_iterations: usize,
-    pub entity_plan_max_iterations_per_tick: usize,
-    pub entity_plan_max_active_simulated_entities_per_iteration: usize,
-    pub entity_plan_max_total_iterations: usize,
+    pub entity_plan_max_transitions: usize,
+    pub entity_plan_max_cost_per_tick: usize,
+    pub entity_plan_max_total_cost: usize,
     pub min_player_inactive_ticks: i32,
     pub engage_distance: i32,
 }
@@ -22,10 +21,9 @@ impl Config {
         Self {
             entity_plan_min_depth: 1,
             entity_plan_max_depth: 4,
-            entity_plan_max_iterations: 200,
-            entity_plan_max_iterations_per_tick: 7500,
-            entity_plan_max_active_simulated_entities_per_iteration: 200,
-            entity_plan_max_total_iterations: 1000000,
+            entity_plan_max_transitions: 200,
+            entity_plan_max_cost_per_tick: 100000,
+            entity_plan_max_total_cost: 10000000,
             min_player_inactive_ticks: 5,
             engage_distance: 1,
         }

@@ -70,7 +70,7 @@ impl EntityPlanner {
     }
 
     pub fn update<R: Rng>(&mut self, map_size: i32, simulator: EntitySimulator,
-                          entity_properties: &Vec<EntityProperties>, max_iterations: usize,
+                          entity_properties: &Vec<EntityProperties>, max_transitions: usize,
                           plans: &[(i32, EntityPlan)], rng: &mut R) -> usize {
         self.states.clear();
         self.transitions.clear();
@@ -99,8 +99,8 @@ impl EntityPlanner {
                     continue;
                 }
             }
-            if iteration >= max_iterations {
-                break;
+            if self.transitions.len() >= max_transitions {
+                continue;
             }
             let entity = if let Some(entity) = self.states[state_index].simulator.entities().iter()
                 .find(|v| v.id == self.entity_id) {
@@ -114,6 +114,9 @@ impl EntityPlanner {
             self.add_move_entity_actions(&entity, map_size, &mut actions);
             actions.shuffle(rng);
             for action_type in actions.into_iter() {
+                if self.transitions.len() >= max_transitions {
+                    break;
+                }
                 frontier.push(self.add_transition(action_type, &other_actions, state_index, entity_properties, rng));
             }
         }
