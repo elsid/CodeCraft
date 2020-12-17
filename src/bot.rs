@@ -57,10 +57,11 @@ impl Drop for Bot {
             &stats,
         ).unwrap();
         println!(
-            "[{}] {} {} {} {} {:?} {:?} {} {} {} {}", self.world.current_tick(), stats.entity_planner_iterations,
+            "[{}] {} {} {} {} {:?} {:?} {} {} {} {} {} {}", self.world.current_tick(), stats.entity_planner_iterations,
             stats.find_hidden_path_calls, stats.path_updates, stats.last_tick_entity_planner_iterations,
             stats.last_tick_duration, stats.max_tick_duration, stats.max_tick_duration_entity_planner_iterations,
             stats.last_entities_to_plan, stats.max_entities_to_plan, stats.max_entity_planner_iterations_per_entity,
+            stats.last_entity_simulator_entities, stats.max_tick_duration_entity_simulator_entities,
         );
     }
 }
@@ -494,6 +495,7 @@ impl Bot {
                 .lowest(Vec2i::both(self.world.map_size() - map_size))
                 .highest(Vec2i::zero());
             let simulator = EntitySimulator::new(shift, map_size as usize, &self.world);
+            self.stats.borrow_mut().add_entity_simulator_entities(simulator.entities().len());
             planner.update(
                 self.world.map_size(),
                 simulator.clone(),

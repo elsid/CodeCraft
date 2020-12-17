@@ -16,6 +16,8 @@ pub struct StatsResult {
     pub last_entities_to_plan: usize,
     pub max_entities_to_plan: usize,
     pub max_entity_planner_iterations_per_entity: usize,
+    pub last_entity_simulator_entities: usize,
+    pub max_tick_duration_entity_simulator_entities: usize,
 }
 
 #[derive(Default)]
@@ -30,6 +32,8 @@ pub struct Stats {
     last_entities_to_plan: usize,
     max_tick_duration_entities_to_plan: usize,
     max_tick_duration_entity_planner_iterations_per_entity: usize,
+    last_entity_simulator_entities: usize,
+    max_tick_duration_entity_simulator_entities: usize,
 }
 
 impl Stats {
@@ -45,6 +49,8 @@ impl Stats {
             last_entities_to_plan: 0,
             max_tick_duration_entities_to_plan: 0,
             max_tick_duration_entity_planner_iterations_per_entity: 0,
+            last_entity_simulator_entities: 0,
+            max_tick_duration_entity_simulator_entities: 0,
         }
     }
 
@@ -60,6 +66,8 @@ impl Stats {
             last_entities_to_plan: self.last_entities_to_plan,
             max_entities_to_plan: self.max_tick_duration_entities_to_plan,
             max_entity_planner_iterations_per_entity: self.max_tick_duration_entity_planner_iterations_per_entity,
+            last_entity_simulator_entities: self.last_entity_simulator_entities,
+            max_tick_duration_entity_simulator_entities: self.max_tick_duration_entity_simulator_entities,
         }
     }
 
@@ -92,11 +100,17 @@ impl Stats {
             if self.last_entities_to_plan > 0 {
                 self.max_tick_duration_entity_planner_iterations_per_entity = self.last_tick_entity_planner_iterations / self.last_entities_to_plan;
                 self.max_tick_duration_entities_to_plan = self.last_entities_to_plan;
+                self.max_tick_duration_entity_simulator_entities = self.last_entity_simulator_entities;
             }
         }
+        self.last_entity_simulator_entities = 0;
     }
 
     pub fn add_entities_to_plan(&mut self, value: usize) {
         self.last_entities_to_plan = value;
+    }
+
+    pub fn add_entity_simulator_entities(&mut self, value: usize) {
+        self.last_entity_simulator_entities += value;
     }
 }
