@@ -17,7 +17,7 @@ use rand::SeedableRng;
 
 #[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
-use crate::my_strategy::{Config, EntityPlanner, EntitySimulator, Group, GroupState, is_protected_entity_type, Positionable, Range, Rect, Role, Stats, Task, TaskManager, Tile, Vec2i, World};
+use crate::my_strategy::{Config, EntityPlanner, EntitySimulator, Group, GroupState, is_active_entity_type, is_protected_entity_type, Positionable, Range, Rect, Role, Stats, Task, TaskManager, Tile, Vec2i, World};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
@@ -469,6 +469,7 @@ impl Bot {
             return;
         }
         let mut simulators = Vec::new();
+        let mut simulated_entities = 0;
         for entity in units.iter() {
             let properties = self.world.get_entity_properties(&entity.entity_type);
             let map_size = 2 * properties.sight_range;
@@ -476,16 +477,26 @@ impl Bot {
                 .lowest(Vec2i::both(self.world.map_size() - map_size))
                 .highest(Vec2i::zero());
             let simulator = EntitySimulator::new(shift, map_size as usize, &self.world);
-            self.stats.borrow_mut().add_entity_simulator_entities(simulator.entities().len());
+            simulated_entities += simulator.entities().iter()
+                .filter(|entity| is_active_entity_type(&entity.entity_type, self.world.entity_properties()))
+                .count();
             simulators.push((entity.id, simulator));
         }
-        let entity_plan_max_iterations = ((
-            (self.config.entity_plan_max_total_iterations - self.stats.borrow().entity_planner_iterations()) as f32
-            / (self.world.max_tick_count() - self.world.current_tick()) as f32
-            / (2 * units.len() - 1) as f32
-        ).round().max(1.0) as usize)
-            .min(self.config.entity_plan_max_iterations)
-            .min(self.config.entity_plan_max_iterations_per_tick / (2 * units.len() - 1));
+        self.stats.borrow_mut().add_entity_simulator_entities(simulated_entities);
+        let simulated_entities_per_plan = simulated_entities as f32 / units.len() as f32;
+        let entity_plan_max_iterations = (
+            self.config.entity_plan_max_active_simulated_entities_per_iteration as f32
+                * (self.config.entity_plan_max_total_iterations - self.stats.borrow().entity_planner_iterations()) as f32
+                / (self.world.max_tick_count() - self.world.current_tick()) as f32
+                / (2.0 * simulated_entities as f32 - simulated_entities_per_plan)
+        ).min(self.config.entity_plan_max_iterations as f32)
+            .min(
+                self.config.entity_plan_max_iterations_per_tick as f32
+                    * self.config.entity_plan_max_active_simulated_entities_per_iteration as f32
+                    / (2.0 * simulated_entities as f32 - simulated_entities_per_plan)
+            )
+            .max(1.0)
+            .round() as usize;
         let mut plans = Vec::new();
         let mut rng = self.rng.borrow_mut();
         for i in 0..units.len() {
@@ -499,15 +510,15 @@ impl Bot {
                         config.entity_plan_max_depth,
                     )
                 });
-            planner.update(
+            let iterations = planner.update(
                 self.world.map_size(),
                 simulators[i].1.clone(),
                 self.world.entity_properties(),
                 entity_plan_max_iterations,
                 &Vec::new(),
                 &mut *rng,
-                &mut *self.stats.borrow_mut(),
             );
+            self.stats.borrow_mut().add_entity_planner_iterations(iterations);
             if !planner.plan().transitions.is_empty() {
                 plans.push((units[i].id, planner.plan().clone()));
             }
@@ -515,15 +526,15 @@ impl Bot {
         plans.sort_by_key(|(entity_id, plan)| (-plan.score, *entity_id));
         for i in 1..plans.len() {
             let planner = self.entity_planners.get_mut(&plans[i].0).unwrap();
-            planner.update(
+            let iterations = planner.update(
                 self.world.map_size(),
                 simulators.iter().find(|(entity_id, _)| *entity_id == plans[i].0).unwrap().1.clone(),
                 self.world.entity_properties(),
                 entity_plan_max_iterations,
                 &plans[0..i],
                 &mut *rng,
-                &mut *self.stats.borrow_mut(),
             );
+            self.stats.borrow_mut().add_entity_planner_iterations(iterations);
             if !planner.plan().transitions.is_empty() {
                 plans[i].1 = planner.plan().clone();
             }

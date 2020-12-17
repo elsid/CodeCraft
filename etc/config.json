@@ -3,6 +3,7 @@
   "entity_plan_max_depth": 4,
   "entity_plan_max_iterations": 200,
   "entity_plan_max_iterations_per_tick": 7500,
+  "entity_plan_max_active_simulated_entities_per_iteration": 200,
   "entity_plan_max_total_iterations": 1000000,
   "min_player_inactive_ticks": 5,
   "engage_distance": 1

@@ -6,7 +6,7 @@ use model::Color;
 use rand::Rng;
 use rand::seq::SliceRandom;
 
-use crate::my_strategy::{EntitySimulator, position_to_index, SimulatedEntity, SimulatedEntityAction, SimulatedEntityActionType, Stats, Vec2i, visit_range};
+use crate::my_strategy::{EntitySimulator, position_to_index, SimulatedEntity, SimulatedEntityAction, SimulatedEntityActionType, Vec2i, visit_range};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
@@ -71,7 +71,7 @@ impl EntityPlanner {
 
     pub fn update<R: Rng>(&mut self, map_size: i32, simulator: EntitySimulator,
                           entity_properties: &Vec<EntityProperties>, max_iterations: usize,
-                          plans: &[(i32, EntityPlan)], rng: &mut R, stats: &mut Stats) {
+                          plans: &[(i32, EntityPlan)], rng: &mut R) -> usize {
         self.states.clear();
         self.transitions.clear();
         self.states.push(State {
@@ -118,15 +118,15 @@ impl EntityPlanner {
             }
         }
 
-        stats.add_entity_planner_iterations(iteration);
-
         self.optimal_final_state_index = optimal_final_state_index;
         self.plan = optimal_final_state_index
             .map(|state_index| EntityPlan {
                 score: max_score,
                 transitions: self.reconstruct_sequence(state_index),
             })
-            .unwrap_or_else(|| EntityPlan::default())
+            .unwrap_or_else(|| EntityPlan::default());
+
+        iteration
     }
 
     #[cfg(feature = "enable_debug")]
@@ -192,8 +192,7 @@ impl EntityPlanner {
                     continue;
                 }
             }
-            if !matches!(entity.entity_type, EntityType::BuilderUnit)
-                && entity_properties[entity.entity_type.clone() as usize].attack.is_some() {
+            if is_active_entity_type(&entity.entity_type, entity_properties) {
                 result.push(SimulatedEntityAction {
                     entity_id: entity.id,
                     action_type: SimulatedEntityActionType::AutoAttack,
@@ -296,4 +295,9 @@ impl EntityPlanner {
         result.reverse();
         result
     }
+}
+
+pub fn is_active_entity_type(entity_type: &EntityType, entity_properties: &Vec<EntityProperties>) -> bool {
+    !matches!(*entity_type, EntityType::BuilderUnit)
+        && entity_properties[entity_type.clone() as usize].attack.is_some()
 }
