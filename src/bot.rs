@@ -457,7 +457,7 @@ impl Bot {
                                 if let Some(opponent_attack) = opponent_properties.attack.as_ref() {
                                     let bounds = Rect::new(opponent.position(), opponent.position() + Vec2i::both(opponent_properties.size));
                                     let distance = bounds.distance_to_position(entity.position());
-                                    distance <= opponent_attack.attack_range.max(attack.attack_range) + 1
+                                    distance <= opponent_attack.attack_range.max(attack.attack_range) + self.config.engage_distance
                                 } else {
                                     false
                                 }
