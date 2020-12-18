@@ -346,12 +346,7 @@ impl Bot {
                 }) {
                 target.position()
             } else {
-                self.world.my_turrets()
-                    .min_by_key(|v| {
-                        v.center(world.get_entity_properties(&v.entity_type).size).distance(position)
-                    })
-                    .map(|v| v.position())
-                    .unwrap_or(self.world.start_position())
+                self.world.start_position() + self.world.grow_direction() * self.world.protected_radius() / 2
             }
         } else {
             if let Some(target) = self.world.opponent_entities()
