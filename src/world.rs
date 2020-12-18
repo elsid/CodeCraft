@@ -11,7 +11,7 @@ use model::{
 #[cfg(feature = "enable_debug")]
 use model::Color;
 
-use crate::my_strategy::{Config, index_to_position, is_entity_base, is_entity_unit, Map, ReachabilityMap, position_to_index, Positionable, Range, Rect, Tile, Vec2i, visit_neighbour, visit_range, visit_reversed_shortest_path, visit_square, Stats};
+use crate::my_strategy::{Config, index_to_position, is_entity_base, is_entity_unit, Map, position_to_index, Positionable, ReachabilityMap, Rect, Stats, Tile, Vec2i, visit_neighbour, visit_range, visit_reversed_shortest_path, visit_square};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{debug, Vec2f};
 
@@ -800,7 +800,12 @@ impl World {
         None
     }
 
-    pub fn find_shortest_path_next_position(&self, src: Vec2i, target: &Range) -> Option<Vec2i> {
+    pub fn find_shortest_path_next_position<T: FindPathTarget>(&self, src: Vec2i, target: &T, find_nearest: bool) -> Option<Vec2i> {
+        self.find_shortest_path_next_position_and_distance(src, target, find_nearest)
+            .map(|(v, _)| v)
+    }
+
+    pub fn find_shortest_path_next_position_and_distance<T: FindPathTarget>(&self, src: Vec2i, target: &T, find_nearest: bool) -> Option<(Vec2i, i32)> {
         let bounds = self.bounds();
         let size = self.map_size as usize;
 
@@ -816,7 +821,7 @@ impl World {
         let src_index = position_to_index(src, size);
 
         costs[src_index] = 0;
-        discovered.push((-target.center().distance(src), src_index));
+        discovered.push((-target.get_distance(src), src_index));
 
         const EDGES: &[Vec2i] = &[
             Vec2i::only_x(1),
@@ -830,11 +835,12 @@ impl World {
 
         while let Some((_, node_index)) = discovered.pop() {
             let node_position = index_to_position(node_index, size);
-            let distance = target.center().distance(node_position);
-            if min_distance > distance {
+            let reached = target.has_reached(node_position);
+            let distance = target.get_distance(node_position);
+            if reached || min_distance > distance && find_nearest {
                 min_distance = distance;
                 nearest_position_index = Some(node_index);
-                if distance <= target.radius() {
+                if reached {
                     break;
                 }
             }
@@ -859,7 +865,7 @@ impl World {
                     continue;
                 }
                 open[neighbour_index] = false;
-                let new_score = new_cost + target.center().distance(neighbour_position);
+                let new_score = new_cost + target.get_distance(neighbour_position);
                 discovered.push((-new_score, neighbour_index));
             }
         }
@@ -870,7 +876,7 @@ impl World {
                 first_position_index = Some(index);
             });
             if success {
-                return first_position_index.map(|v| index_to_position(v, size));
+                return first_position_index.map(|v| (index_to_position(v, size), min_distance));
             }
         }
 
@@ -892,6 +898,12 @@ impl World {
     pub fn harvest_positions(&self) -> &Vec<Vec2i> {
         &self.harvest_positions
     }
+}
+
+pub trait FindPathTarget {
+    fn has_reached(&self, position: Vec2i) -> bool;
+
+    fn get_distance(&self, position: Vec2i) -> i32;
 }
 
 pub fn is_protected_entity_type(entity_type: &EntityType) -> bool {

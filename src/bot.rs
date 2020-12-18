@@ -423,6 +423,7 @@ impl Bot {
                             self.world.find_shortest_path_next_position(
                                 entity.position(),
                                 &Range::new(target, properties.sight_range),
+                                true,
                             )
                         } else {
                             Some(target)
