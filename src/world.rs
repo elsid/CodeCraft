@@ -45,6 +45,7 @@ pub struct World {
     known_map_resource: i32,
     predicted_map_resource: f32,
     is_passable: Vec<bool>,
+    harvest_positions: Vec<Vec2i>,
     config: Config,
     #[cfg(feature = "enable_debug")]
     player_score_time_series: Vec<Vec<i32>>,
@@ -123,6 +124,7 @@ impl World {
             known_map_resource: 0,
             predicted_map_resource: 0.0,
             is_passable: Vec::new(),
+            harvest_positions: Vec::new(),
             config,
             #[cfg(feature = "enable_debug")]
             player_score_time_series: std::iter::repeat(Vec::new()).take(player_view.players.len()).collect(),
@@ -286,6 +288,17 @@ impl World {
         self.known_map_resource = self.resources().map(|v| v.health).sum();
         let discovered_map_part = 1.0 - self.count_unknown_tiles() as f32 / (self.map_size * self.map_size) as f32;
         self.predicted_map_resource = self.known_map_resource as f32 / discovered_map_part - self.known_map_resource as f32;
+        let mut harvest_positions = HashSet::new();
+        visit_range(self.start_position, 1, self.protected_radius, &self.bounds(), |position| {
+            if let Some(EntityType::Resource) = self.get_tile_entity_type(self.get_tile(position)) {
+                visit_neighbour(position, 1, |position| {
+                    if self.contains(position) && self.is_reachable_from_base(position) {
+                        harvest_positions.insert(position);
+                    }
+                });
+            }
+        });
+        self.harvest_positions = harvest_positions.into_iter().collect();
         #[cfg(feature = "enable_debug")]
         for i in 0..self.players.len() {
             let player_id = self.players[i].id;
@@ -490,6 +503,14 @@ impl World {
         self.map.borrow().find_neighbour(position, size, |_, tile, locked| {
             !locked && matches!(tile, Tile::Empty)
         })
+    }
+
+    pub fn visit_free_tiles_nearby<F: FnMut(Vec2i)>(&self, position: Vec2i, size: i32, mut f: F) {
+        self.map.borrow().visit_neighbour(position, size, |position, tile, locked| {
+            if !locked && matches!(tile, Tile::Empty) {
+                f(position);
+            }
+        });
     }
 
     pub fn find_nearest_free_tile_nearby_for_unit(&self, position: Vec2i, size: i32, unit_id: i32) -> Option<Vec2i> {
@@ -736,21 +757,11 @@ impl World {
     }
 
     pub fn get_max_required_builders_count(&self) -> usize {
-        let mut harvest_positions = HashSet::new();
-        visit_range(self.start_position, 1, self.protected_radius, &self.bounds(), |position| {
-            if let Some(EntityType::Resource) = self.get_tile_entity_type(self.get_tile(position)) {
-                visit_neighbour(position, 1, |position| {
-                    if self.contains(position) && self.is_reachable_from_base(position) {
-                        harvest_positions.insert(position);
-                    }
-                });
-            }
-        });
         let properties = self.get_entity_properties(&EntityType::BuilderUnit);
         let map_resource_estimate = self.known_map_resource as f32 + self.predicted_map_resource * (1.0 - self.current_tick as f32 / self.max_tick_count as f32) / 2.0;
         let ticks_left = (self.max_tick_count - self.current_tick).max(1);
         ((map_resource_estimate / (properties.attack.as_ref().unwrap().damage * ticks_left) as f32).round().max(1.0) as usize)
-            .min(harvest_positions.len())
+            .min(self.harvest_positions.len())
     }
 
     pub fn has_active_base_for(&self, entity_type: &EntityType) -> bool {
@@ -876,6 +887,10 @@ impl World {
 
     pub fn is_reachable_from_base(&self, position: Vec2i) -> bool {
         self.reachability_map.borrow().is_reachable(position)
+    }
+
+    pub fn harvest_positions(&self) -> &Vec<Vec2i> {
+        &self.harvest_positions
     }
 }
 

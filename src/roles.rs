@@ -94,16 +94,42 @@ fn harvest_resource(entity: &Entity, world: &World, resource_id: i32) -> EntityA
 fn build_unit(base: &Entity, world: &World) -> EntityAction {
     let properties = world.get_entity_properties(&base.entity_type);
     if let Some(build_properties) = properties.build.as_ref() {
-        if let Some(position) = world.find_free_tile_nearby(base.position(), properties.size) {
-            return EntityAction {
-                attack_action: None,
-                build_action: Some(BuildAction {
-                    position: position.as_model(),
-                    entity_type: build_properties.options[0].clone(),
-                }),
-                repair_action: None,
-                move_action: None,
-            };
+        if matches!(build_properties.options[0], EntityType::BuilderUnit) && !world.harvest_positions().is_empty() {
+            let mut min_distance = std::i32::MAX;
+            let mut build_position = None;
+            world.visit_free_tiles_nearby(base.position(), properties.size, |position| {
+                let distance = world.harvest_positions().iter()
+                    .map(|v| v.distance(position))
+                    .min()
+                    .unwrap();
+                if min_distance > distance {
+                    build_position = Some(position);
+                    min_distance = distance;
+                }
+            });
+            if let Some(position) = build_position {
+                return EntityAction {
+                    attack_action: None,
+                    build_action: Some(BuildAction {
+                        position: position.as_model(),
+                        entity_type: build_properties.options[0].clone(),
+                    }),
+                    repair_action: None,
+                    move_action: None,
+                };
+            }
+        } else {
+            if let Some(position) = world.find_free_tile_nearby(base.position(), properties.size) {
+                return EntityAction {
+                    attack_action: None,
+                    build_action: Some(BuildAction {
+                        position: position.as_model(),
+                        entity_type: build_properties.options[0].clone(),
+                    }),
+                    repair_action: None,
+                    move_action: None,
+                };
+            }
         }
     }
     get_idle_action()

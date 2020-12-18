@@ -198,6 +198,14 @@ impl Map {
         )
     }
 
+    pub fn visit_neighbour<F: FnMut(Vec2i, Tile, bool)>(&self, position: Vec2i, size: i32, mut f: F) {
+        visit_neighbour(position, size, |tile_position| {
+            if self.contains(tile_position) {
+                f(tile_position, self.get_tile(tile_position), self.is_tile_locked(tile_position));
+            }
+        })
+    }
+
     pub fn find_on_square_border<F: FnMut(Vec2i, Tile, bool) -> bool>(&self, position: Vec2i, size: i32, mut f: F) -> Option<Vec2i> {
         find_on_rect_border(
             position,
