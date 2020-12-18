@@ -127,6 +127,7 @@ impl Group {
         self.need.values().fold(0, |r, v| r + *v)
     }
 
+    #[cfg(feature = "enable_debug")]
     pub fn get_bounds_min(&self, world: &World) -> Vec2i {
         self.units.keys()
             .fold(
@@ -135,6 +136,7 @@ impl Group {
             )
     }
 
+    #[cfg(feature = "enable_debug")]
     pub fn get_bounds_max(&self, world: &World) -> Vec2i {
         self.units.keys()
             .fold(
