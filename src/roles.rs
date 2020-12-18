@@ -11,7 +11,7 @@ use model::{
     RepairAction,
 };
 
-use crate::my_strategy::{EntityPlanner, Group, Positionable, SimulatedEntityActionType, Vec2i, World};
+use crate::my_strategy::{EntityPlanner, Group, Positionable, Rect, SimulatedEntityActionType, SizedRange, Vec2i, World};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Role {
@@ -145,21 +145,21 @@ fn build_unit(base: &Entity, world: &World) -> EntityAction {
 }
 
 fn build_building(builder: &Entity, world: &World, position: Vec2i, entity_type: &EntityType) -> EntityAction {
-    let target = world.find_nearest_free_tile_nearby_for_unit(
-        position,
-        world.get_entity_properties(entity_type).size,
-        builder.id,
-    );
-    target
-        .map(|v| EntityAction {
+    let size = world.get_entity_properties(entity_type).size;
+    get_target_position_nearby(builder.position(), position, size, world)
+        .map(|target| EntityAction {
             attack_action: None,
-            build_action: Some(BuildAction {
-                position: position.as_model(),
-                entity_type: entity_type.clone(),
-            }),
+            build_action: if target == builder.position() {
+                Some(BuildAction {
+                    position: position.as_model(),
+                    entity_type: entity_type.clone(),
+                })
+            } else {
+                None
+            },
             repair_action: None,
             move_action: Some(MoveAction {
-                target: v.as_model(),
+                target: target.as_model(),
                 find_closest_position: false,
                 break_through: false,
             }),
@@ -169,23 +169,33 @@ fn build_building(builder: &Entity, world: &World, position: Vec2i, entity_type:
 
 fn repair_building(builder: &Entity, world: &World, base_id: i32) -> EntityAction {
     let base = world.get_entity(base_id);
-    let target = world.find_nearest_free_tile_nearby_for_unit(
-        base.position(),
-        world.get_entity_properties(&base.entity_type).size,
-        builder.id,
-    );
-    target
-        .map(|v| EntityAction {
-            attack_action: None,
-            build_action: None,
-            repair_action: Some(RepairAction { target: base_id }),
-            move_action: Some(MoveAction {
-                target: v.as_model(),
-                find_closest_position: true,
-                break_through: false,
-            }),
+    let size = world.get_entity_properties(&base.entity_type).size;
+    get_target_position_nearby(builder.position(), base.position(), size, world)
+        .map(|target| {
+            EntityAction {
+                attack_action: None,
+                build_action: None,
+                repair_action: if target == builder.position() {
+                    Some(RepairAction { target: base_id })
+                } else {
+                    None
+                },
+                move_action: Some(MoveAction {
+                    target: target.as_model(),
+                    find_closest_position: true,
+                    break_through: false,
+                }),
+            }
         })
         .unwrap_or_else(get_idle_action)
+}
+
+fn get_target_position_nearby(position: Vec2i, target: Vec2i, size: i32, world: &World) -> Option<Vec2i> {
+    let bounds = Rect::new(target, target + Vec2i::both(size));
+    if bounds.distance_to_position(position) == 1 {
+        return Some(position);
+    }
+    world.find_shortest_path_next_position(position, &SizedRange::new(target, size, 1), false)
 }
 
 fn assist_group(unit: &Entity, world: &World, group: &Group, entity_targets: &HashMap<i32, Vec2i>, entity_planners: &HashMap<i32, EntityPlanner>) -> EntityAction {
