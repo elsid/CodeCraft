@@ -119,7 +119,16 @@ fn build_unit(base: &Entity, world: &World) -> EntityAction {
                 };
             }
         } else {
-            if let Some(position) = world.find_free_tile_nearby(base.position(), properties.size) {
+            let mut max_distance = std::i32::MIN;
+            let mut build_position = None;
+            world.visit_free_tiles_nearby(base.position(), properties.size, |position| {
+                let distance = world.start_position().distance(position);
+                if max_distance < distance {
+                    build_position = Some(position);
+                    max_distance = distance;
+                }
+            });
+            if let Some(position) = build_position {
                 return EntityAction {
                     attack_action: None,
                     build_action: Some(BuildAction {
