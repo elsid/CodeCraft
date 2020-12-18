@@ -26,6 +26,7 @@ pub enum Role {
     },
     BuildingRepairer {
         building_id: i32,
+        need_resources: bool,
     },
     GroupMember {
         group_id: u32,
@@ -44,7 +45,7 @@ impl Role {
             Role::Harvester { resource_id } => harvest_resource(entity, world, *resource_id),
             Role::UnitBuilder => build_unit(entity, world),
             Role::BuildingBuilder { position, entity_type } => build_building(entity, world, *position, entity_type),
-            Role::BuildingRepairer { building_id: base_id } => repair_building(entity, world, *base_id),
+            Role::BuildingRepairer { building_id: base_id, need_resources } => repair_building(entity, world, *base_id, *need_resources),
             Role::GroupMember { group_id } => assist_group(entity, world, groups.iter().find(|v| v.id() == *group_id).unwrap(), entity_targets, entity_planners),
             Role::GroupSupplier { .. } => build_unit(entity, world),
             Role::None => get_default_action(entity, world),
@@ -167,7 +168,11 @@ fn build_building(builder: &Entity, world: &World, position: Vec2i, entity_type:
         .unwrap_or_else(get_idle_action)
 }
 
-fn repair_building(builder: &Entity, world: &World, base_id: i32) -> EntityAction {
+fn repair_building(builder: &Entity, world: &World, base_id: i32, need_resources: bool) -> EntityAction {
+    if need_resources &&
+        !world.try_allocate_resource(world.get_entity_properties(&EntityType::BuilderUnit).repair.as_ref().unwrap().power) {
+        return get_idle_action();
+    }
     let base = world.get_entity(base_id);
     let size = world.get_entity_properties(&base.entity_type).size;
     get_target_position_nearby(builder.position(), base.position(), size, world)

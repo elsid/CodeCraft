@@ -599,6 +599,10 @@ impl World {
         *self.requested_resource.borrow()
     }
 
+    pub fn force_allocate_resource(&self, amount: i32) {
+        *self.allocated_resource.borrow_mut() += amount;
+    }
+
     pub fn try_allocate_resource(&self, amount: i32) -> bool {
         if self.my_resource() < amount {
             return false;

@@ -214,7 +214,7 @@ fn repair_buildings(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus
     let done: Vec<i32> = roles.iter()
         .filter_map(|(entity_id, role)| {
             match role {
-                Role::BuildingRepairer { building_id } => world.find_entity(*building_id)
+                Role::BuildingRepairer { building_id, .. } => world.find_entity(*building_id)
                     .map(|building| {
                         if building.health >= world.get_entity_properties(&building.entity_type).max_health {
                             Some(*entity_id)
@@ -232,7 +232,7 @@ fn repair_buildings(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus
     }
     let assigned: HashSet<i32> = roles.values()
         .filter_map(|v| match v {
-            Role::BuildingRepairer { building_id: base_id } => Some(*base_id),
+            Role::BuildingRepairer { building_id: base_id, .. } => Some(*base_id),
             _ => None,
         })
         .collect();
@@ -289,7 +289,7 @@ fn repair_buildings(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus
         for i in 0..candidates.len().min(need) {
             let builder_id = candidates[i].1;
             harvesters -= matches!(roles[&builder_id], Role::Harvester { .. }) as usize;
-            roles.insert(builder_id, Role::BuildingRepairer { building_id });
+            roles.insert(builder_id, Role::BuildingRepairer { building_id, need_resources: true });
         }
     }
     TaskStatus::Wait
@@ -410,7 +410,7 @@ impl BuildBuildingTask {
         if let Some(position) = self.position {
             for builder_id in self.builder_ids.iter() {
                 if let Some(base_id) = self.building_id {
-                    roles.insert(*builder_id, Role::BuildingRepairer { building_id: base_id });
+                    roles.insert(*builder_id, Role::BuildingRepairer { building_id: base_id, need_resources: false });
                 } else {
                     roles.insert(*builder_id, Role::BuildingBuilder { position, entity_type: self.entity_type.clone() });
                 }
