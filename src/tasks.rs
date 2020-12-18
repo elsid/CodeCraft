@@ -346,9 +346,6 @@ impl BuildBuildingTask {
         }
         self.builder_ids.retain(|v| world.contains_entity(*v));
         let need = get_builders_count_for(world, &self.entity_type, roles, self.builder_ids.len(), self.building_id);
-        while self.builder_ids.len() > need {
-            roles.insert(self.builder_ids.pop().unwrap(), Role::None);
-        }
         if let (Some(position), None) = (self.position, self.building_id) {
             if !world.is_empty_square(position, properties.size) {
                 self.position = None;
