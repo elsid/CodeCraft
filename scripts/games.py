@@ -42,6 +42,7 @@ def main(**kwargs):
 def run(players, game_type, runner_bin_path, start_port, workers, max_runs, prefix, output_path,
         verbose, timeout, seed, config_path, visual, sides):
     players = tuple(parse_players(text=players, start_port=start_port))
+    assert len(players) == len({v.start_port if v.name is None else v.name for v in players}), f'{[v.name for v in players]}'
     session = f"{prefix}.{game_type}.{format_players(players)}.{start_port}.{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     games_path = os.path.join(output_path, game_type, session)
     scheduler = Scheduler(workers_number=workers, ports_per_worker=len(players), verbose=verbose, timeout=timeout)
