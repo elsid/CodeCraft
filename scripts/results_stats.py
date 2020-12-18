@@ -142,15 +142,18 @@ def show_ratio_plot(pyplot, name, values):
 
 
 def show_metric_plot(pyplot, stats, metric):
-    fig, ax = pyplot.subplots()
-    fig.canvas.set_window_title(metric)
-    ax.set_title(metric)
-    for player, values in stats[metric].items():
-        ax.plot(numpy.arange(0, len(values), 1), values, label=player)
-    total = functools.reduce(operator.add, stats[metric].values())
-    ax.plot(numpy.arange(0, len(total), 1), total, label='total')
-    ax.grid(True)
-    ax.legend()
+    try:
+        fig, ax = pyplot.subplots()
+        fig.canvas.set_window_title(metric)
+        ax.set_title(metric)
+        for player, values in stats[metric].items():
+            ax.plot(numpy.arange(0, len(values), 1), values, label=player)
+        total = functools.reduce(operator.add, stats[metric].values())
+        ax.plot(numpy.arange(0, len(total), 1), total, label='total')
+        ax.grid(True)
+        ax.legend()
+    except ValueError as e:
+        print(e)
 
 
 def show_plot(pyplot, name, values):
