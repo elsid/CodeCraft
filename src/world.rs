@@ -209,7 +209,10 @@ impl World {
             }
         }
         self.population_use = self.my_entities().map(|v| self.get_entity_properties(&v.entity_type).population_use).sum();
-        self.population_provide = self.my_entities().map(|v| self.get_entity_properties(&v.entity_type).population_provide).sum();
+        self.population_provide = self.my_entities()
+            .filter(|entity| entity.active)
+            .map(|entity| self.get_entity_properties(&entity.entity_type).population_provide)
+            .sum();
         *self.base_size.borrow_mut() = None;
         *self.allocated_resource.borrow_mut() = 0;
         *self.allocated_population.borrow_mut() = 0;
@@ -617,7 +620,7 @@ impl World {
     }
 
     pub fn my_population_provide(&self) -> i32 {
-        self.population_provide - *self.allocated_population.borrow()
+        self.population_provide - self.population_use - *self.allocated_population.borrow()
     }
 
     pub fn allocated_population(&self) -> i32 {
