@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use model::EntityType;
 
-use crate::my_strategy::{Group, GroupState, Positionable, Role, Tile, Vec2i, World};
+use crate::my_strategy::{Group, GroupState, Positionable, Role, SizedRange, Tile, Vec2i, World};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::debug;
 
@@ -253,7 +253,11 @@ fn repair_buildings(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus
     let builders = world.get_my_entity_count_of(&EntityType::BuilderUnit);
     for (_, building_id) in buildings.into_iter() {
         let building = world.get_entity(building_id);
-        let building_center = building.center(world.get_entity_properties(&building.entity_type).size);
+        let target = SizedRange::new(
+            building.position(),
+            world.get_entity_properties(&building.entity_type).size,
+            1,
+        );
         let mut candidates: Vec<(i32, i32)> = world.my_builder_units()
             .filter(|v| match roles[&v.id] {
                 Role::None => true,
@@ -261,7 +265,13 @@ fn repair_buildings(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus
                 Role::BuildingBuilder { .. } => true,
                 _ => false,
             })
-            .map(|v| (v.center(world.get_entity_properties(&v.entity_type).size).distance(building_center), v.id))
+            .filter_map(|entity| {
+                if target.contains(entity.position()) {
+                    return Some((0, entity.id));
+                }
+                world.find_shortest_path_next_position_and_distance(entity.position(), &target, false)
+                    .map(|(_, distance)| (distance, entity.id))
+            })
             .collect();
         if candidates.is_empty() {
             break;
@@ -369,7 +379,8 @@ impl BuildBuildingTask {
             }
         }
         if self.position.is_some() && need > self.builder_ids.len() {
-            let mut candidates: Vec<(Vec2i, i32)> = world.my_builder_units()
+            let target = SizedRange::new(self.position.unwrap(), properties.size, 1);
+            let mut candidates: Vec<(i32, i32)> = world.my_builder_units()
                 .filter(|entity| {
                     if self.builder_ids.iter().find(|v| **v == entity.id).is_some() {
                         return false;
@@ -380,7 +391,13 @@ impl BuildBuildingTask {
                         _ => false,
                     }
                 })
-                .map(|v| (v.position(), v.id))
+                .filter_map(|entity| {
+                    if target.contains(entity.position()) {
+                        return Some((0, entity.id));
+                    }
+                    world.find_shortest_path_next_position_and_distance(entity.position(), &target, false)
+                        .map(|(_, distance)| (distance, entity.id))
+                })
                 .collect();
             candidates.sort();
             for i in 0..(need - self.builder_ids.len()).min(candidates.len()) {
