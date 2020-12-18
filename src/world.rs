@@ -871,13 +871,7 @@ impl World {
     }
 
     pub fn get_player_position(&self, player_id: i32) -> Vec2i {
-        match player_id {
-            1 => Vec2i::both(10),
-            2 => Vec2i::both(self.map_size - 10),
-            3 => Vec2i::new(self.map_size - 10, 10),
-            4 => Vec2i::new(10, self.map_size - 10),
-            _ => Vec2i::both(self.map_size / 2),
-        }
+        get_player_position(player_id, self.map_size)
     }
 
     pub fn is_reachable_from_base(&self, position: Vec2i) -> bool {
@@ -894,5 +888,15 @@ pub fn is_protected_entity_type(entity_type: &EntityType) -> bool {
         EntityType::RangedBase => true,
         EntityType::BuilderUnit => true,
         _ => false,
+    }
+}
+
+pub fn get_player_position(player_id: i32, map_size: i32) -> Vec2i {
+    match player_id {
+        1 => Vec2i::both(10),
+        2 => Vec2i::both(map_size - 10),
+        3 => Vec2i::new(map_size - 10, 10),
+        4 => Vec2i::new(10, map_size - 10),
+        _ => Vec2i::both(map_size / 2),
     }
 }
