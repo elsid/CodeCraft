@@ -357,7 +357,8 @@ impl BuildBuildingTask {
             return TaskStatus::Wait;
         }
         if let Some(building_id) = self.building_id {
-            if world.get_entity(building_id).active {
+            let building = world.get_entity(building_id);
+            if building.active {
                 for builder_id in self.builder_ids.iter() {
                     roles.insert(*builder_id, Role::None);
                 }
@@ -365,6 +366,11 @@ impl BuildBuildingTask {
                     world.release_requested_resource(cost);
                 }
                 return TaskStatus::Done;
+            } else {
+                let builder_properties = world.get_entity_properties(&EntityType::BuilderUnit);
+                let required_resource = (properties.max_health - building.health)
+                    .min(builder_properties.repair.as_ref().unwrap().power * self.builder_ids.len() as i32);
+                world.force_allocate_resource(required_resource);
             }
         }
         if self.position.is_none() {
