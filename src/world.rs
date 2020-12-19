@@ -765,7 +765,7 @@ impl World {
 
     pub fn get_max_required_builders_count(&self) -> usize {
         let properties = self.get_entity_properties(&EntityType::BuilderUnit);
-        let map_resource_estimate = self.known_map_resource as f32 + self.predicted_map_resource * (1.0 - self.current_tick as f32 / self.max_tick_count as f32) / 2.0;
+        let map_resource_estimate = self.known_map_resource as f32 + self.predicted_map_resource;
         let ticks_left = (self.max_tick_count - self.current_tick).max(1);
         ((map_resource_estimate / (properties.attack.as_ref().unwrap().damage * ticks_left) as f32).round().max(1.0) as usize)
             .min(self.harvest_positions.len())
