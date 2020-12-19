@@ -32,7 +32,6 @@ pub struct World {
     population_provide: i32,
     start_position: Vec2i,
     grow_direction: Vec2i,
-    base_size: RefCell<Option<i32>>,
     requested_resource: RefCell<i32>,
     allocated_resource: RefCell<i32>,
     allocated_population: RefCell<i32>,
@@ -111,7 +110,6 @@ impl World {
             population_provide: 0,
             start_position: Vec2i::new(start_position_x, start_position_y),
             grow_direction: Vec2i::new(grow_direction_x, grow_direction_y),
-            base_size: RefCell::new(None),
             requested_resource: RefCell::new(0),
             allocated_resource: RefCell::new(0),
             allocated_population: RefCell::new(0),
@@ -213,7 +211,6 @@ impl World {
             .filter(|entity| entity.active)
             .map(|entity| self.get_entity_properties(&entity.entity_type).population_provide)
             .sum();
-        *self.base_size.borrow_mut() = None;
         *self.allocated_resource.borrow_mut() = 0;
         *self.allocated_population.borrow_mut() = 0;
         self.protected_radius = self.my_entities()
