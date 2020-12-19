@@ -38,7 +38,6 @@ impl TaskManager {
         }
         for task_id in done.iter() {
             match &self.tasks[task_id] {
-                Task::BuildBuilders => self.stats.build_builders -= 1,
                 Task::BuildBuilding(v) => match v.entity_type {
                     EntityType::House => self.stats.build_house -= 1,
                     EntityType::Turret => self.stats.build_turret -= 1,
@@ -48,7 +47,6 @@ impl TaskManager {
                     _ => (),
                 }
                 Task::GatherGroup(..) => self.stats.gather_group -= 1,
-                Task::RepairBuildings => self.stats.repair_buildings -= 1,
                 _ => (),
             }
         }
@@ -78,7 +76,6 @@ impl TaskManager {
         let task_id = self.next_task_id;
         self.next_task_id += 1;
         match &task {
-            Task::BuildBuilders => self.stats.build_builders += 1,
             Task::BuildBuilding(v) => match v.entity_type {
                 EntityType::House => self.stats.build_house += 1,
                 EntityType::Turret => self.stats.build_turret += 1,
@@ -88,7 +85,6 @@ impl TaskManager {
                 _ => (),
             }
             Task::GatherGroup(..) => self.stats.gather_group += 1,
-            Task::RepairBuildings => self.stats.repair_buildings += 1,
             _ => (),
         }
         self.tasks.insert(task_id, task);
@@ -110,9 +106,6 @@ pub struct TasksCount {
 
 #[derive(Debug)]
 pub enum Task {
-    HarvestResources,
-    BuildBuilders,
-    RepairBuildings,
     BuildBuilding(BuildBuildingTask),
     GatherGroup(GatherGroupTask),
     BuildUnits(BuildUnitsTask),
@@ -138,9 +131,6 @@ impl Task {
 
     pub fn update(&mut self, world: &World, roles: &mut HashMap<i32, Role>, groups: &mut Vec<Group>) -> TaskStatus {
         match self {
-            Self::HarvestResources => harvest_resources(world, roles),
-            Self::BuildBuilders => build_builders(world, roles),
-            Self::RepairBuildings => repair_buildings(world, roles),
             Self::BuildBuilding(task) => task.update(world, roles),
             Self::GatherGroup(task) => task.update(world, roles, groups),
             Self::BuildUnits(task) => task.update(world, roles),
@@ -156,7 +146,7 @@ pub enum TaskStatus {
     Fail,
 }
 
-pub fn harvest_resources(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus {
+pub fn harvest_resources(world: &World, roles: &mut HashMap<i32, Role>) {
     for builder in world.my_builder_units() {
         if let Role::Harvester { resource_id } = roles[&builder.id] {
             if world.is_attacked_by_opponents(builder.position()) {
@@ -185,10 +175,9 @@ pub fn harvest_resources(world: &World, roles: &mut HashMap<i32, Role>) -> TaskS
                 .map(|resource| roles.insert(builder.id, Role::Harvester { resource_id: resource.id }));
         }
     }
-    TaskStatus::Wait
 }
 
-fn build_builders(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus {
+pub fn build_builders(world: &World, roles: &mut HashMap<i32, Role>) {
     let mut builders = world.get_my_entity_count_of(&EntityType::BuilderUnit);
     let properties = world.get_entity_properties(&EntityType::BuilderUnit);
     let cost = world.get_entity_cost(&EntityType::BuilderUnit);
@@ -207,10 +196,9 @@ fn build_builders(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus {
             roles.insert(entity.id, role);
         }
     }
-    TaskStatus::Wait
 }
 
-fn repair_buildings(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus {
+pub fn repair_buildings(world: &World, roles: &mut HashMap<i32, Role>) {
     let done: Vec<i32> = roles.iter()
         .filter_map(|(entity_id, role)| {
             match role {
@@ -292,7 +280,6 @@ fn repair_buildings(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus
             roles.insert(builder_id, Role::BuildingRepairer { building_id, need_resources: true });
         }
     }
-    TaskStatus::Wait
 }
 
 #[derive(Debug)]

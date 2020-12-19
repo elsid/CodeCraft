@@ -17,7 +17,7 @@ use rand::SeedableRng;
 
 #[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
-use crate::my_strategy::{Config, EntityPlanner, EntitySimulator, Group, GroupState, is_active_entity_type, is_protected_entity_type, Positionable, Range, Rect, Role, Stats, Task, TaskManager, Tile, Vec2i, World};
+use crate::my_strategy::{build_builders, Config, EntityPlanner, EntitySimulator, Group, GroupState, harvest_resources, is_active_entity_type, is_protected_entity_type, Positionable, Range, Rect, repair_buildings, Role, Stats, Task, TaskManager, Tile, Vec2i, World};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
@@ -170,6 +170,11 @@ impl Bot {
             self.try_build_builder_base();
         }
         self.tasks.update(&self.world, &mut self.roles, &mut self.groups);
+        harvest_resources(&self.world, &mut self.roles);
+        repair_buildings(&self.world, &mut self.roles);
+        if matches!(self.opening, OpeningType::None) {
+            build_builders(&self.world, &mut self.roles);
+        }
     }
 
     fn entity_actions(&self) -> HashMap<i32, EntityAction> {
@@ -207,14 +212,11 @@ impl Bot {
                 self.gather_group(need);
             }
             self.tasks.push_back(Task::build_units(EntityType::BuilderUnit, (self.world.population_provide() - self.world.population_use()) as usize));
-            self.tasks.push_back(Task::RepairBuildings);
-            self.tasks.push_back(Task::HarvestResources);
         }
         if self.world.get_my_entity_count_of(&EntityType::RangedBase) == 0
             || self.world.get_my_units_count() >= 15
             || self.world.get_my_entity_count_of(&EntityType::MeleeUnit) == 0
             || self.world.get_my_entity_count_of(&EntityType::RangedUnit) == 0 {
-            self.tasks.push_back(Task::BuildBuilders);
             return true;
         }
         if self.world.my_resource() >= self.world.get_entity_cost(&EntityType::House) {
@@ -242,12 +244,9 @@ impl Bot {
                 ));
             }
             self.tasks.push_back(Task::build_units(EntityType::BuilderUnit, 15));
-            self.tasks.push_back(Task::RepairBuildings);
-            self.tasks.push_back(Task::HarvestResources);
         }
         if self.world.current_tick() > 100 || self.world.population_provide() > 15
             || self.world.get_my_entity_count_of(&EntityType::RangedBase) >= 1 {
-            self.tasks.push_back(Task::BuildBuilders);
             return true;
         }
         if self.tasks.stats().build_ranged_base == 0
