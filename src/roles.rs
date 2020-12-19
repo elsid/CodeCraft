@@ -65,9 +65,10 @@ impl Role {
 
 fn harvest_resource(entity: &Entity, world: &World, resource_id: i32) -> EntityAction {
     let builder_properties = world.get_entity_properties(&EntityType::BuilderUnit);
+    let resource = world.get_entity(resource_id);
+    let builder_attack_properties = builder_properties.attack.as_ref().unwrap();
     EntityAction {
         attack_action: if world.is_attacked_by_opponents(entity.position()) {
-            let builder_attack_properties = builder_properties.attack.as_ref().unwrap();
             Some(AttackAction {
                 target: None,
                 auto_attack: Some(AutoAttack {
@@ -75,22 +76,29 @@ fn harvest_resource(entity: &Entity, world: &World, resource_id: i32) -> EntityA
                     valid_targets: vec![EntityType::BuilderUnit],
                 }),
             })
-        } else {
+        } else if resource.position().distance(entity.position()) <= 1 {
             Some(AttackAction {
                 target: Some(resource_id),
                 auto_attack: Some(AutoAttack {
-                    pathfind_range: 2 * world.map_size(),
+                    pathfind_range: builder_attack_properties.attack_range,
                     valid_targets: vec![EntityType::BuilderUnit, EntityType::Resource],
                 }),
             })
+        } else {
+            None
         },
         build_action: None,
         repair_action: None,
-        move_action: Some(MoveAction {
-            target: world.get_entity(resource_id).position.clone(),
-            break_through: true,
-            find_closest_position: true,
-        }),
+        move_action: if resource.position().distance(entity.position()) > 1 {
+            get_target_position_nearby(entity.position(), resource.position(), 1, world)
+                .map(|next| MoveAction {
+                    target: next.as_model(),
+                    break_through: true,
+                    find_closest_position: false,
+                })
+        } else {
+            None
+        },
     }
 }
 
