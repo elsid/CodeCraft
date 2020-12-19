@@ -418,11 +418,16 @@ impl Bot {
                 if let Some(target) = nearest_free_position {
                     return if self.world.is_tile_cached(target) {
                         self.stats.borrow_mut().add_find_hidden_path_calls(1);
-                        self.world.find_shortest_path_next_position(
+                        if let Some(next) = self.world.find_shortest_path_next_position(
                             entity.position(),
                             &Range::new(target, properties.sight_range),
                             true,
-                        )
+                        ) {
+                            self.world.add_move(entity.position(), next);
+                            Some(next)
+                        } else {
+                            None
+                        }
                     } else {
                         Some(target)
                     };

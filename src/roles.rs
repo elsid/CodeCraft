@@ -210,7 +210,12 @@ fn get_target_position_nearby(position: Vec2i, target: Vec2i, size: i32, world: 
     if bounds.distance_to_position(position) == 1 {
         return Some(position);
     }
-    world.find_shortest_path_next_position(position, &SizedRange::new(target, size, 1), false)
+    if let Some(next) = world.find_shortest_path_next_position(position, &SizedRange::new(target, size, 1), false) {
+        world.add_move(position, next);
+        Some(next)
+    } else {
+        None
+    }
 }
 
 fn assist_group(unit: &Entity, world: &World, group: &Group, entity_targets: &HashMap<i32, Vec2i>, entity_planners: &HashMap<i32, EntityPlanner>) -> EntityAction {

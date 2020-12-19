@@ -45,6 +45,7 @@ pub struct World {
     predicted_map_resource: f32,
     is_passable: Vec<bool>,
     harvest_positions: Vec<Vec2i>,
+    moves: RefCell<Vec<(Vec2i, Vec2i)>>,
     config: Config,
     #[cfg(feature = "enable_debug")]
     player_score_time_series: Vec<Vec<i32>>,
@@ -104,6 +105,7 @@ impl World {
             predicted_map_resource: 0.0,
             is_passable: Vec::new(),
             harvest_positions: Vec::new(),
+            moves: RefCell::new(Vec::new()),
             config,
             #[cfg(feature = "enable_debug")]
             player_score_time_series: std::iter::repeat(Vec::new()).take(player_view.players.len()).collect(),
@@ -280,6 +282,7 @@ impl World {
             }
         });
         self.harvest_positions = harvest_positions.into_iter().collect();
+        self.moves.borrow_mut().clear();
         #[cfg(feature = "enable_debug")]
         for i in 0..self.players.len() {
             let player_id = self.players[i].id;
@@ -591,6 +594,10 @@ impl World {
         true
     }
 
+    pub fn add_move(&self, src: Vec2i, dst: Vec2i) {
+        self.moves.borrow_mut().push((src, dst));
+    }
+
     pub fn lock_square(&self, position: Vec2i, size: i32) {
         self.map.borrow_mut().lock_square(position, size);
     }
@@ -803,8 +810,21 @@ impl World {
                     continue;
                 }
                 match self.get_tile(neighbour_position) {
-                    Tile::Entity(..) => continue,
+                    Tile::Entity(entity_id) => {
+                        let entity = self.get_entity(entity_id);
+                        match &entity.entity_type {
+                            EntityType::BuilderUnit | EntityType::MeleeUnit | EntityType::RangedUnit => {
+                                if !self.moves.borrow().iter().any(|(src, _)| *src == entity.position()) {
+                                    continue;
+                                }
+                            },
+                            _ => continue,
+                        }
+                    },
                     _ => (),
+                }
+                if self.moves.borrow().iter().any(|(_, dst)| *dst == neighbour_position) {
+                    continue;
                 }
                 let new_cost = costs[node_index] + 1;
                 let neighbour_index = position_to_index(neighbour_position, size);
