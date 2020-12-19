@@ -169,10 +169,10 @@ impl Bot {
     fn update_tasks(&mut self) {
         if matches!(self.opening, OpeningType::None) || self.try_play_opening() {
             self.opening = OpeningType::None;
+            self.try_build_builder_base();
+            self.try_build_ranged_base();
             self.try_gather_group();
             self.try_build_house();
-            self.try_build_ranged_base();
-            self.try_build_builder_base();
         }
         self.tasks.update(&self.world, &mut self.roles, &mut self.groups);
         if self.world.fog_of_war() {
@@ -278,7 +278,7 @@ impl Bot {
 
     fn gather_group(&mut self, need: HashMap<EntityType, usize>) {
         let group_id = self.create_group(need);
-        self.tasks.push_front(Task::gather_group(group_id));
+        self.tasks.push_back(Task::gather_group(group_id));
     }
 
     fn create_group(&mut self, need: HashMap<EntityType, usize>) -> u32 {
@@ -294,7 +294,7 @@ impl Bot {
         let capacity_left = self.world.population_provide() - self.world.population_use();
         if (self.tasks.stats().build_house as i32) < (self.world.population_use() / 10).max(1).min(3)
             && (capacity_left < 5 || self.world.population_use() * 100 / self.world.population_provide() > 90) {
-            self.tasks.push_front(Task::build_building(EntityType::House));
+            self.tasks.push_back(Task::build_building(EntityType::House));
         }
     }
 
@@ -303,7 +303,7 @@ impl Bot {
             && self.world.get_my_entity_count_of(&EntityType::RangedBase) == 0
             && self.world.get_my_entity_count_of(&EntityType::BuilderUnit) > 0
             && self.world.my_resource() >= self.world.get_entity_cost(&EntityType::RangedBase) {
-            self.tasks.push_front(Task::build_building(EntityType::RangedBase));
+            self.tasks.push_back(Task::build_building(EntityType::RangedBase));
         }
     }
 
@@ -312,7 +312,7 @@ impl Bot {
             && self.world.get_my_entity_count_of(&EntityType::BuilderBase) == 0
             && self.world.get_my_entity_count_of(&EntityType::BuilderUnit) > 0
             && self.world.my_resource() >= self.world.get_entity_cost(&EntityType::BuilderBase) {
-            self.tasks.push_front(Task::build_building(EntityType::BuilderBase));
+            self.tasks.push_back(Task::build_building(EntityType::BuilderBase));
         }
     }
 
