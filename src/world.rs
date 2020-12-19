@@ -851,7 +851,7 @@ impl World {
             open[node_index] = true;
             for &shift in EDGES.iter() {
                 let neighbour_position = node_position + shift;
-                if !bounds.contains(neighbour_position) {
+                if !bounds.contains(neighbour_position) || self.is_tile_locked(neighbour_position) {
                     continue;
                 }
                 match self.get_tile(neighbour_position) {
