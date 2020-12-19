@@ -361,7 +361,7 @@ mod tests {
     use rand::rngs::StdRng;
     use rand::SeedableRng;
 
-    use crate::my_strategy::examples;
+    use crate::my_strategy::{Config, examples, Stats};
 
     use super::*;
 
@@ -434,8 +434,9 @@ mod tests {
 
     fn new_world() -> World {
         let player_view = new_player_view();
-        let mut world = World::new(&player_view);
-        world.update(&player_view);
+        let mut world = World::new(&player_view, Config::new());
+        let mut stats = Stats::default();
+        world.update(&player_view, &mut stats);
         world
     }
 

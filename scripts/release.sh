@@ -45,4 +45,8 @@ cargo build --release
 
 zip ${SRC}/release/${VERSION}.zip -r Cargo.toml src model
 
+cp ${SRC}/src/examples.rs src/
+
+cargo test --release
+
 ls -al ${SRC}/release/${VERSION}.zip
