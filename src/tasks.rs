@@ -262,7 +262,7 @@ fn repair_buildings(world: &World, roles: &mut HashMap<i32, Role>) -> TaskStatus
             .filter(|v| match roles[&v.id] {
                 Role::None => true,
                 Role::Harvester { .. } => harvesters > 0,
-                Role::BuildingBuilder { .. } => true,
+                Role::BuildingRepairer { building_id: repaired_building_id, .. } => repaired_building_id == building_id,
                 _ => false,
             })
             .filter_map(|entity| {
