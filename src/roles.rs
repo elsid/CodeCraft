@@ -210,8 +210,8 @@ fn assist_group(unit: &Entity, world: &World, group: &Group, entity_targets: &Ha
     let unit_center = unit.center(properties.size);
     let repair_action = properties.repair.as_ref()
         .and_then(|_| {
-            group.units()
-                .filter_map(|unit_id| {
+            group.units().iter()
+                .filter_map(|(unit_id, _)| {
                     if *unit_id != unit.id {
                         return None;
                     }
