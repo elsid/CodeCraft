@@ -243,21 +243,29 @@ impl Bot {
                     self.world.get_entity_properties(&EntityType::House).size,
                 ));
             }
-            self.tasks.push_back(Task::build_units(EntityType::BuilderUnit, 15));
+            self.tasks.push_back(Task::build_units(
+                EntityType::BuilderUnit,
+                (self.world.population_provide() - self.world.population_use()) as usize,
+            ));
         }
-        if self.world.current_tick() > 100 || self.world.population_provide() > 15
+        if self.world.current_tick() > 300
             || self.world.get_my_entity_count_of(&EntityType::RangedBase) >= 1 {
             return true;
         }
         if self.tasks.stats().build_ranged_base == 0
-            && self.world.get_my_entity_count_of(&EntityType::BuilderUnit) >= 10
-            && self.world.my_resource() >= self.world.get_entity_cost(&EntityType::RangedBase) {
-            self.tasks.push_back(Task::build_building(EntityType::RangedBase));
-        }
-        if self.tasks.stats().build_house < 2
+            && self.world.get_my_entity_count_of(&EntityType::RangedBase) == 0
+            && self.world.get_my_entity_count_of(&EntityType::House) >= 4 {
+            if self.world.my_resource() >= self.world.get_entity_cost(&EntityType::RangedBase) {
+                self.tasks.push_back(Task::build_building(EntityType::RangedBase));
+            }
+        } else if (self.tasks.stats().build_house == 0 || (self.tasks.stats().build_house < 2 && self.world.get_my_entity_count_of(&EntityType::House) >= 2))
             && self.world.population_provide() == self.world.population_use()
             && self.world.my_resource() >= self.world.get_entity_cost(&EntityType::House) {
             self.tasks.push_back(Task::build_building(EntityType::House));
+            self.tasks.push_back(Task::build_units(
+                EntityType::BuilderUnit,
+                self.world.get_entity_properties(&EntityType::House).population_provide as usize,
+            ));
         }
         false
     }
