@@ -13,7 +13,6 @@ import threading
 import time
 import traceback
 import helpers
-import itertools
 
 
 @click.command()
@@ -49,7 +48,6 @@ def run(players, game_type, runner_bin_path, start_port, workers, max_runs, pref
     scheduler.start()
     while len(players) < sides:
         players += players
-    players_permutations = list(itertools.permutations(players, sides))
     for number in range(max_runs):
         if verbose:
             print(f'{max_runs - number - 1} tasks is left')
@@ -62,7 +60,7 @@ def run(players, game_type, runner_bin_path, start_port, workers, max_runs, pref
                 config_path=config_path,
                 visual=visual,
             ),
-            players=players_permutations[number % len(players_permutations)],
+            players=random.sample(players, sides),
         ))
     if verbose:
         print('No more new tasks')
