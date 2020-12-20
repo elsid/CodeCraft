@@ -105,7 +105,7 @@ impl EntitySimulator {
             players: world.players().iter()
                 .map(|player| SimulatedPlayer {
                     id: player.id,
-                    score: player.score,
+                    score: 0,
                     damage_done: 0,
                     damage_received: 0,
                 })
