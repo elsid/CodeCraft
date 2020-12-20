@@ -108,10 +108,10 @@ impl BattlePlanner {
                         plans[depth].iter()
                             .find(|action| action.entity_id == entity.id)
                             .map(|action| action.action_type.clone())
-                            .unwrap_or(SimulatedEntityActionType::AutoAttack)
+                            .unwrap_or(SimulatedEntityActionType::AttackInRange)
                     );
                 } else {
-                    actions.push(SimulatedEntityActionType::AutoAttack);
+                    actions.push(SimulatedEntityActionType::AttackInRange);
                 }
             }
             let mut action_index = 0;

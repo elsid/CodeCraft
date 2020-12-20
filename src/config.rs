@@ -32,10 +32,10 @@ impl Config {
             min_player_inactive_ticks: 5,
             engage_distance: 1,
             battle_plan_min_depth: 1,
-            battle_plan_max_depth: 4,
-            battle_plan_max_transitions: 1000,
-            battle_plan_max_cost_per_tick: 100000,
-            battle_plan_max_total_cost: 20000000,
+            battle_plan_max_depth: 7,
+            battle_plan_max_transitions: 100000,
+            battle_plan_max_cost_per_tick: 1000000,
+            battle_plan_max_total_cost: 100000000,
         }
     }
 }
