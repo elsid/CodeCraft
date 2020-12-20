@@ -1,5 +1,6 @@
 use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign};
 
+use cogset::Point;
 use model::{Vec2F32, Vec2I32};
 
 #[derive(Default, Clone, Copy, Debug, PartialOrd)]
@@ -367,5 +368,11 @@ impl SubAssign for Vec2i {
             x: self.x - other.x,
             y: self.y - other.y,
         };
+    }
+}
+
+impl Point for Vec2i {
+    fn dist(&self, other: &Self) -> f64 {
+        self.distance(*other) as f64
     }
 }

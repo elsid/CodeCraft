@@ -110,8 +110,8 @@ impl EntityPlanner {
             };
             let other_actions = self.get_other_actions(&self.states[state_index], entity_properties, plans);
             let mut actions = Vec::new();
-            self.add_attack_actions(&entity, &self.states[state_index].simulator, entity_properties, &mut actions);
-            self.add_move_entity_actions(&entity, map_size, &mut actions);
+            Self::add_attack_actions(&entity, &self.states[state_index].simulator, entity_properties, &mut actions);
+            Self::add_move_entity_actions(&entity, map_size, &mut actions);
             actions.shuffle(rng);
             for action_type in actions.into_iter() {
                 if self.transitions.len() >= max_transitions {
@@ -205,11 +205,11 @@ impl EntityPlanner {
         result
     }
 
-    fn add_attack_actions(&self, entity: &SimulatedEntity, simulator: &EntitySimulator,
-                          entity_properties: &Vec<EntityProperties>, actions: &mut Vec<SimulatedEntityActionType>) {
+    pub fn add_attack_actions(entity: &SimulatedEntity, simulator: &EntitySimulator,
+                              entity_properties: &Vec<EntityProperties>, actions: &mut Vec<SimulatedEntityActionType>) {
         let properties = &entity_properties[entity.entity_type.clone() as usize];
         if let Some(attack) = properties.attack.as_ref() {
-            let map_size = simulator.map_size();
+            let map_size = simulator.map_width();
             let bounds = simulator.bounds();
             if simulator.entities().len() < (attack.attack_range * attack.attack_range) as usize {
                 for target in simulator.entities().iter() {
@@ -237,7 +237,7 @@ impl EntityPlanner {
         }
     }
 
-    fn add_move_entity_actions(&self, entity: &SimulatedEntity, map_size: i32, actions: &mut Vec<SimulatedEntityActionType>) {
+    pub fn add_move_entity_actions(entity: &SimulatedEntity, map_size: i32, actions: &mut Vec<SimulatedEntityActionType>) {
         if entity.position.x() + 1 < map_size {
             actions.push(SimulatedEntityActionType::MoveEntity { direction: Vec2i::only_x(1) });
         }

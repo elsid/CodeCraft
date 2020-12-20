@@ -158,6 +158,12 @@ impl Map {
         });
     }
 
+    pub fn visit_rect<F: FnMut(Vec2i, Tile, bool)>(&self, rect: &Rect, mut f: F) {
+        visit_rect(rect, |tile_position| {
+            f(tile_position, self.get_tile(tile_position), self.is_tile_locked(tile_position))
+        });
+    }
+
     pub fn visit_range<F: FnMut(Vec2i, Tile, bool)>(&self, position: Vec2i, size: i32, range: i32, mut f: F) {
         let bounds = Rect::new(Vec2i::zero(), Vec2i::both(self.size as i32));
         visit_range(position, size, range, &bounds, |tile_position| {
@@ -382,6 +388,14 @@ pub fn visit_square<F: FnMut(Vec2i)>(position: Vec2i, size: i32, mut f: F) {
     }
 }
 
+pub fn visit_rect<F: FnMut(Vec2i)>(rect: &Rect, mut f: F) {
+    for y in rect.min().y()..rect.max().y() {
+        for x in rect.min().x()..rect.max().x() {
+            f(Vec2i::new(x, y))
+        }
+    }
+}
+
 pub fn find_inside_square<F: FnMut(Vec2i) -> bool>(position: Vec2i, size: i32, mut f: F) -> Option<Vec2i> {
     for y in position.y()..position.y() + size {
         for x in position.x()..position.x() + size {
@@ -396,7 +410,7 @@ pub fn find_inside_square<F: FnMut(Vec2i) -> bool>(position: Vec2i, size: i32, m
 
 #[cfg(test)]
 mod tests {
-    use crate::my_strategy::{Rect, Vec2i, visit_range};
+    use super::*;
 
     #[test]
     fn visit_range_1_1() {
@@ -441,5 +455,25 @@ mod tests {
             Vec2i::new(4, 7), Vec2i::new(5, 7), Vec2i::new(6, 7), Vec2i::new(7, 7),
             Vec2i::new(5, 8), Vec2i::new(6, 8),
         ]);
+    }
+
+    #[test]
+    fn position_to_index_all() {
+        assert_eq!(position_to_index(Vec2i::new(0, 0), 3), 0);
+        assert_eq!(position_to_index(Vec2i::new(0, 1), 3), 3);
+        assert_eq!(position_to_index(Vec2i::new(0, 2), 3), 6);
+        assert_eq!(position_to_index(Vec2i::new(1, 0), 3), 1);
+        assert_eq!(position_to_index(Vec2i::new(2, 0), 3), 2);
+        assert_eq!(position_to_index(Vec2i::new(1, 1), 3), 4);
+    }
+
+    #[test]
+    fn index_to_position_all() {
+        assert_eq!(index_to_position(0, 3), Vec2i::new(0, 0));
+        assert_eq!(index_to_position(3, 3), Vec2i::new(0, 1));
+        assert_eq!(index_to_position(6, 3), Vec2i::new(0, 2));
+        assert_eq!(index_to_position(1, 3), Vec2i::new(1, 0));
+        assert_eq!(index_to_position(2, 3), Vec2i::new(2, 0));
+        assert_eq!(index_to_position(4, 3), Vec2i::new(1, 1));
     }
 }

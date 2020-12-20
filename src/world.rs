@@ -789,6 +789,10 @@ impl World {
         self.map.borrow().visit_square(position, size, f);
     }
 
+    pub fn visit_map_rect<F: FnMut(Vec2i, Tile, bool)>(&self, rect: &Rect, f: F) {
+        self.map.borrow().visit_rect(rect, f);
+    }
+
     pub fn visit_map_range<F: FnMut(Vec2i, Tile, bool)>(&self, position: Vec2i, size: i32, range: i32, f: F) {
         self.map.borrow().visit_range(position, size, range, f)
     }

@@ -162,6 +162,19 @@ impl<'a> Debug<'a> {
         }
     }
 
+    pub fn add_world_cross(&mut self, center: Vec2f, size: f32, color: Color) {
+        self.add_world_line(
+            center - Vec2f::both(size),
+            center + Vec2f::both(size),
+            color.clone(),
+        );
+        self.add_world_line(
+            center - Vec2f::both(size).left(),
+            center + Vec2f::both(size).left(),
+            color,
+        );
+    }
+
     pub fn send(&mut self, debug: &mut DebugInterface) {
         debug.send(model::DebugCommand::Clear {});
         if !self.triangle_vertices.is_empty() {
