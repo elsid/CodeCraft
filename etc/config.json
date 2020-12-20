@@ -3,7 +3,7 @@
   "entity_plan_max_depth": 4,
   "entity_plan_max_transitions": 200,
   "entity_plan_max_cost_per_tick": 100000,
-  "entity_plan_max_total_iterations": 10000000,
+  "entity_plan_max_total_cost": 10000000,
   "min_player_inactive_ticks": 5,
   "engage_distance": 1
 }
