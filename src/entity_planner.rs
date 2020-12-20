@@ -209,7 +209,7 @@ impl EntityPlanner {
                           entity_properties: &Vec<EntityProperties>, actions: &mut Vec<SimulatedEntityActionType>) {
         let properties = &entity_properties[entity.entity_type.clone() as usize];
         if let Some(attack) = properties.attack.as_ref() {
-            let map_size = simulator.map_size();
+            let map_size = simulator.map_width();
             let bounds = simulator.bounds();
             if simulator.entities().len() < (attack.attack_range * attack.attack_range) as usize {
                 for target in simulator.entities().iter() {

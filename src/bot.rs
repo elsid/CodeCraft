@@ -478,10 +478,12 @@ impl Bot {
         for entity in units.iter() {
             let properties = self.world.get_entity_properties(&entity.entity_type);
             let map_size = 2 * properties.sight_range;
-            let shift = (entity.position() - Vec2i::both(map_size / 2))
-                .lowest(Vec2i::both(self.world.map_size() - map_size))
-                .highest(Vec2i::zero());
-            let simulator = EntitySimulator::new(shift, map_size as usize, &self.world);
+            let shift = entity.position() - Vec2i::both(map_size / 2);
+            let bounds = Rect::new(
+                shift.highest(Vec2i::zero()),
+                (shift + Vec2i::both(map_size)).lowest(Vec2i::both(self.world.map_size())),
+            );
+            let simulator = EntitySimulator::new(bounds, &self.world);
             simulated_entities += simulator.entities().iter()
                 .filter(|entity| is_active_entity_type(&entity.entity_type, self.world.entity_properties()))
                 .count();

@@ -158,6 +158,12 @@ impl Map {
         });
     }
 
+    pub fn visit_rect<F: FnMut(Vec2i, Tile, bool)>(&self, rect: &Rect, mut f: F) {
+        visit_rect(rect, |tile_position| {
+            f(tile_position, self.get_tile(tile_position), self.is_tile_locked(tile_position))
+        });
+    }
+
     pub fn visit_range<F: FnMut(Vec2i, Tile, bool)>(&self, position: Vec2i, size: i32, range: i32, mut f: F) {
         let bounds = Rect::new(Vec2i::zero(), Vec2i::both(self.size as i32));
         visit_range(position, size, range, &bounds, |tile_position| {
@@ -377,6 +383,14 @@ pub fn visit_square_with_bounds<F: FnMut(Vec2i)>(position: Vec2i, size: i32, bou
 pub fn visit_square<F: FnMut(Vec2i)>(position: Vec2i, size: i32, mut f: F) {
     for y in position.y()..position.y() + size {
         for x in position.x()..position.x() + size {
+            f(Vec2i::new(x, y))
+        }
+    }
+}
+
+pub fn visit_rect<F: FnMut(Vec2i)>(rect: &Rect, mut f: F) {
+    for y in rect.min().y()..rect.max().y() {
+        for x in rect.min().x()..rect.max().x() {
             f(Vec2i::new(x, y))
         }
     }
