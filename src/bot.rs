@@ -58,9 +58,9 @@ impl Drop for Bot {
         ).unwrap();
         println!(
             "[{}] {} {} {} {:?} {:?} {} {}", self.world.current_tick(),
-            stats.total_plan_cost, stats.find_hidden_path_calls, stats.reachability_updates,
-            stats.last_tick_duration, stats.max_tick_duration, stats.last_tick_plan_cost,
-            stats.max_tick_plan_cost
+            stats.total_entity_plan_cost, stats.find_hidden_path_calls, stats.reachability_updates,
+            stats.last_tick_duration, stats.max_tick_duration, stats.last_tick_entity_plan_cost,
+            stats.max_tick_entity_plan_cost
         );
     }
 }
@@ -489,7 +489,7 @@ impl Bot {
         let simulated_entities_per_plan = simulated_entities as f32 / units.len() as f32;
         let estimated_iteration_cost = 2.0 * simulated_entities as f32 - simulated_entities_per_plan;
         let entity_plan_max_transitions = (
-            (self.config.entity_plan_max_total_cost - self.stats.borrow().total_plan_cost()) as f32
+            (self.config.entity_plan_max_total_cost - self.stats.borrow().total_entity_plan_cost()) as f32
                 / (self.world.max_tick_count() - self.world.current_tick()) as f32
                 / estimated_iteration_cost
         ).min(self.config.entity_plan_max_transitions as f32)
@@ -546,7 +546,7 @@ impl Bot {
                 plans[i].1 = planner.plan().clone();
             }
         }
-        self.stats.borrow_mut().add_plan_cost(plan_cost);
+        self.stats.borrow_mut().add_entity_plan_cost(plan_cost);
     }
 
     #[cfg(feature = "enable_debug")]
