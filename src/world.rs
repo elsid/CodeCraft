@@ -13,7 +13,7 @@ use model::Color;
 
 use crate::my_strategy::{Config, index_to_position, is_entity_base, is_entity_unit, Map, position_to_index, Positionable, ReachabilityMap, Rect, Stats, Tile, Vec2i, visit_neighbour, visit_range, visit_reversed_shortest_path, visit_square};
 #[cfg(feature = "enable_debug")]
-use crate::my_strategy::{debug, Vec2f};
+use crate::my_strategy::debug;
 
 pub struct World {
     my_id: i32,
@@ -674,17 +674,7 @@ impl World {
             debug.add_static_text(format!("{}: {}", entity_type, count));
         }
         self.map.borrow().debug_update(debug);
-        debug.add_world_line(
-            self.start_position.center() - Vec2f::both(0.5),
-            self.start_position.center() + Vec2f::both(0.5),
-            Color { a: 1.0, r: 0.0, g: 0.0, b: 1.0 },
-        );
-        debug.add_world_line(
-            self.start_position.center() - Vec2f::both(0.5).left(),
-            self.start_position.center() + Vec2f::both(0.5).left(),
-            Color { a: 1.0, r: 0.0, g: 0.0, b: 1.0 },
-        );
-
+        debug.add_world_cross(self.start_position.center(), 0.5, Color { a: 1.0, r: 0.0, g: 0.0, b: 1.0 });
         debug.add_time_series_i32(
             0,
             String::from("Players score"),
