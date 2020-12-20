@@ -114,6 +114,7 @@ impl Bot {
         debug.add_static_text(format!("Opening: {:?}", self.opening));
         self.debug_update_groups(&mut debug);
         self.debug_update_entities(&mut debug);
+        debug.add_static_text(format!("Entity plans: {}", self.entity_planners.len()));
         for entity_planner in self.entity_planners.values() {
             entity_planner.debug_update(self.world.entity_properties(), &mut debug);
         }
