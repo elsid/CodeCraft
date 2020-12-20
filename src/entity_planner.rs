@@ -112,6 +112,7 @@ impl EntityPlanner {
             let mut actions = Vec::new();
             Self::add_attack_actions(&entity, &self.states[state_index].simulator, entity_properties, &mut actions);
             Self::add_move_entity_actions(&entity, map_size, &mut actions);
+            actions.push(SimulatedEntityActionType::None);
             actions.shuffle(rng);
             for action_type in actions.into_iter() {
                 if self.transitions.len() >= max_transitions {

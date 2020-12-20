@@ -12,12 +12,12 @@ use model::{
 };
 #[cfg(feature = "enable_debug")]
 use model::{Color, DebugState};
+use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
-use rand::SeedableRng;
 
 #[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
-use crate::my_strategy::{build_builders, Config, EntityPlanner, EntitySimulator, Group, GroupState, harvest_resources, is_active_entity_type, is_protected_entity_type, Positionable, Range, Rect, repair_buildings, Role, Stats, Task, TaskManager, Tile, Vec2i, World};
+use crate::my_strategy::{build_builders, Config, EntityPlan, EntityPlanner, EntitySimulator, Group, GroupState, harvest_resources, is_active_entity_type, is_protected_entity_type, Positionable, Range, Rect, repair_buildings, Role, Stats, Task, TaskManager, Tile, Vec2i, World};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
@@ -438,52 +438,46 @@ impl Bot {
         for planner in self.entity_planners.values_mut() {
             planner.reset();
         }
-        let units: Vec<&Entity> = self.world.my_units()
-            .filter(|entity| {
-                if !matches!(self.roles[&entity.id], Role::GroupMember { .. } | Role::Fighter) {
-                    return false;
+        let mut my_entities = Vec::new();
+        let mut opponent_entities = Vec::new();
+        for my_entity in self.world.my_entities() {
+            if !is_active_entity_type(&my_entity.entity_type, self.world.entity_properties()) {
+                continue;
+            }
+            if let Some(attack) = self.world.get_entity_properties(&my_entity.entity_type).attack.as_ref() {
+                let mut has_opponents = false;
+                for opponent_entity in self.world.opponent_entities() {
+                    if !is_active_entity_type(&opponent_entity.entity_type, self.world.entity_properties()) {
+                        continue;
+                    }
+                    let opponent_properties = self.world.get_entity_properties(&opponent_entity.entity_type);
+                    if let Some(opponent_attack) = opponent_properties.attack.as_ref() {
+                        let opponent_bounds = Rect::new(opponent_entity.position(), opponent_entity.position() + Vec2i::both(opponent_properties.size));
+                        let distance = opponent_bounds.distance_to_position(my_entity.position());
+                        if distance <= opponent_attack.attack_range.max(attack.attack_range) + self.config.engage_distance {
+                            has_opponents = true;
+                            opponent_entities.push(opponent_entity);
+                        }
+                    }
                 }
-                let properties = self.world.get_entity_properties(&entity.entity_type);
-                properties.attack.as_ref()
-                    .map(|attack| {
-                        self.world.opponent_entities()
-                            .any(|opponent| {
-                                if matches!(opponent.entity_type, EntityType::BuilderUnit) {
-                                    return false;
-                                }
-                                let opponent_properties = self.world.get_entity_properties(&opponent.entity_type);
-                                if let Some(opponent_attack) = opponent_properties.attack.as_ref() {
-                                    let bounds = Rect::new(opponent.position(), opponent.position() + Vec2i::both(opponent_properties.size));
-                                    let distance = bounds.distance_to_position(entity.position());
-                                    distance <= opponent_attack.attack_range.max(attack.attack_range) + self.config.engage_distance
-                                } else {
-                                    false
-                                }
-                            })
-                    })
-                    .unwrap_or(false)
-            })
-            .collect();
-        if units.is_empty() {
+                if has_opponents {
+                    my_entities.push(my_entity);
+                }
+            }
+        }
+        if my_entities.is_empty() {
             return;
         }
-        let mut simulators = Vec::new();
+        opponent_entities.sort_by_key(|entity| entity.id);
+        opponent_entities.dedup_by_key(|entity| entity.id);
         let mut simulated_entities = 0;
-        for entity in units.iter() {
-            let properties = self.world.get_entity_properties(&entity.entity_type);
-            let map_size = 2 * properties.sight_range;
-            let shift = entity.position() - Vec2i::both(map_size / 2);
-            let bounds = Rect::new(
-                shift.highest(Vec2i::zero()),
-                (shift + Vec2i::both(map_size)).lowest(Vec2i::both(self.world.map_size())),
-            );
-            let simulator = EntitySimulator::new(bounds, &self.world);
-            simulated_entities += simulator.entities().iter()
-                .filter(|entity| is_active_entity_type(&entity.entity_type, self.world.entity_properties()))
-                .count();
-            simulators.push((entity.id, simulator));
-        }
-        let simulated_entities_per_plan = simulated_entities as f32 / units.len() as f32;
+        let opponent_simulators: Vec<(i32, EntitySimulator)> = opponent_entities.iter()
+            .map(|entity| (entity.id, self.make_entity_simulator(entity, &mut simulated_entities)))
+            .collect();
+        let my_simulators: Vec<(i32, EntitySimulator)> = my_entities.iter()
+            .map(|entity| (entity.id, self.make_entity_simulator(entity, &mut simulated_entities)))
+            .collect();
+        let simulated_entities_per_plan = simulated_entities as f32 / (my_entities.len() + opponent_entities.len()) as f32;
         let estimated_iteration_cost = 2.0 * simulated_entities as f32 - simulated_entities_per_plan;
         let entity_plan_max_transitions = (
             (self.config.entity_plan_max_total_cost - self.stats.borrow().total_entity_plan_cost()) as f32
@@ -496,54 +490,90 @@ impl Bot {
         let mut plans = Vec::new();
         let mut rng = self.rng.borrow_mut();
         let mut plan_cost = 0;
-        for i in 0..units.len() {
+        for i in 0..opponent_entities.len() {
             let config = &self.config;
-            let planner = self.entity_planners.entry(units[i].id)
+            let mut entity_planner = EntityPlanner::new(
+                opponent_entities[i].player_id.unwrap(),
+                opponent_entities[i].id,
+                config.entity_plan_min_depth,
+                config.entity_plan_max_depth,
+            );
+            let plan = Self::make_entity_plan(
+                &opponent_simulators[i].1, world, entity_plan_max_transitions, &plans,
+                &mut entity_planner, &mut plan_cost, &mut *rng,
+            );
+            if !plan.transitions.is_empty() {
+                plans.push((opponent_entities[i].id, plan));
+            }
+        }
+        for i in 0..my_entities.len() {
+            let config = &self.config;
+            let entity_planner = self.entity_planners.entry(my_entities[i].id)
                 .or_insert_with(|| {
                     EntityPlanner::new(
-                        units[i].player_id.unwrap(),
-                        units[i].id,
+                        my_entities[i].player_id.unwrap(),
+                        my_entities[i].id,
                         config.entity_plan_min_depth,
                         config.entity_plan_max_depth,
                     )
                 });
-            let transitions = planner.update(
-                self.world.map_size(),
-                simulators[i].1.clone(),
-                self.world.entity_properties(),
-                entity_plan_max_transitions,
-                &Vec::new(),
-                &mut *rng,
+            let plan = Self::make_entity_plan(
+                &my_simulators[i].1, world, entity_plan_max_transitions, &plans,
+                entity_planner, &mut plan_cost, &mut *rng,
             );
-            let active_entities = simulators[i].1.entities().iter()
-                .filter(|entity| is_active_entity_type(&entity.entity_type, world.entity_properties()))
-                .count();
-            plan_cost += transitions * active_entities;
-            if !planner.plan().transitions.is_empty() {
-                plans.push((units[i].id, planner.plan().clone()));
+            if !plan.transitions.is_empty() {
+                plans.push((my_entities[i].id, plan));
             }
         }
         plans.sort_by_key(|(entity_id, plan)| (-plan.score, *entity_id));
         for i in 1..plans.len() {
-            let planner = self.entity_planners.get_mut(&plans[i].0).unwrap();
-            let simulator = &simulators.iter().find(|(entity_id, _)| *entity_id == plans[i].0).unwrap().1;
-            let transitions = planner.update(
-                self.world.map_size(),
-                simulator.clone(),
-                self.world.entity_properties(),
-                entity_plan_max_transitions,
-                &plans[0..i],
-                &mut *rng,
-            );
-            let active_entities = simulator.entities().iter()
-                .filter(|entity| is_active_entity_type(&entity.entity_type, world.entity_properties()))
-                .count();
-            plan_cost += transitions * active_entities;
-            if !planner.plan().transitions.is_empty() {
-                plans[i].1 = planner.plan().clone();
+            if let Some(entity_planner) = self.entity_planners.get_mut(&plans[i].0) {
+                let simulator = &my_simulators.iter()
+                    .find(|(entity_id, _)| *entity_id == plans[i].0)
+                    .unwrap().1;
+                let plan = Self::make_entity_plan(
+                    simulator, world, entity_plan_max_transitions, &plans,
+                    entity_planner, &mut plan_cost, &mut *rng,
+                );
+                if !plan.transitions.is_empty() {
+                    plans[i].1 = plan;
+                }
             }
         }
         self.stats.borrow_mut().add_entity_plan_cost(plan_cost);
+    }
+
+    fn make_entity_simulator(&self, entity: &Entity, simulated_entities: &mut usize) -> EntitySimulator {
+        let properties = self.world.get_entity_properties(&entity.entity_type);
+        let map_size = 2 * properties.sight_range;
+        let shift = entity.position() - Vec2i::both(map_size / 2);
+        let bounds = Rect::new(
+            shift.highest(Vec2i::zero()),
+            (shift + Vec2i::both(map_size)).lowest(Vec2i::both(self.world.map_size())),
+        );
+        let simulator = EntitySimulator::new(bounds, &self.world);
+        *simulated_entities += simulator.entities().iter()
+            .filter(|entity| is_active_entity_type(&entity.entity_type, self.world.entity_properties()))
+            .count();
+        simulator
+    }
+
+    fn make_entity_plan<R: Rng>(simulator: &EntitySimulator, world: &World, entity_plan_max_transitions: usize,
+                                plans: &[(i32, EntityPlan)], entity_planner: &mut EntityPlanner,
+                                plan_cost: &mut usize, rng: &mut R) -> EntityPlan {
+        let transitions = entity_planner.update(
+            world.map_size(),
+            simulator.clone(),
+            world.entity_properties(),
+            entity_plan_max_transitions,
+            plans,
+            &mut *rng,
+        );
+        let active_entities = simulator.entities().iter()
+            .filter(|entity| is_active_entity_type(&entity.entity_type, world.entity_properties()))
+            .count();
+        *plan_cost += transitions * active_entities;
+        entity_planner.plan().clone()
     }
 
     #[cfg(feature = "enable_debug")]
