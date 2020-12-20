@@ -67,7 +67,7 @@ def show_stats_by_game_type(games, profile, sort_by):
         stats[game.type]['places'].append(game.players_by_name[profile].place)
     termtables.print(
         list(make_stats_rows(stats, sort_by)),
-        header=['game_type', 'n', 'total_score', 'mean_score', 'median_score', 'mean_place', 'median_place'],
+        header=['game_type', 'n', 'games', 'total_score', 'mean_score', 'median_score', 'mean_place', 'median_place'],
         style=termtables.styles.markdown,
     )
     print()
@@ -82,7 +82,7 @@ def show_stats_by_opponent(games, profile, sort_by):
             stats[opponent]['places'].append(game.players_by_name[profile].place)
     termtables.print(
         list(make_stats_rows(stats, sort_by)),
-        header=['opponent', 'n', 'total_score', 'mean_score', 'median_score', 'mean_place', 'median_place'],
+        header=['opponent', 'n', 'games', 'total_score', 'mean_score', 'median_score', 'mean_place', 'median_place'],
         style=termtables.styles.markdown,
     )
     print()
@@ -98,7 +98,7 @@ def show_stats_by_opponent_and_version(games, profile, sort_by):
             stats[key]['places'].append(game.players_by_name[profile].place)
     termtables.print(
         list(make_stats_rows(stats, sort_by)),
-        header=['opponent', 'version', 'n', 'total_score', 'mean_score', 'median_score', 'mean_place', 'median_place'],
+        header=['opponent', 'version', 'n', 'games', 'total_score', 'mean_score', 'median_score', 'mean_place', 'median_place'],
         style=termtables.styles.markdown,
     )
     print()
@@ -114,7 +114,7 @@ def show_stats_by_opponent_and_game_type(games, profile, sort_by):
             stats[key]['places'].append(game.players_by_name[profile].place)
     termtables.print(
         list(make_stats_rows(stats, sort_by)),
-        header=['opponent', 'game_type', 'n', 'total_score', 'mean_score', 'median_score', 'mean_place', 'median_place'],
+        header=['opponent', 'game_type', 'n', 'games', 'total_score', 'mean_score', 'median_score', 'mean_place', 'median_place'],
         style=termtables.styles.markdown,
     )
     print()
@@ -130,35 +130,36 @@ def show_stats_by_opponent_and_version_and_game_type(games, profile, sort_by):
             stats[key]['places'].append(game.players_by_name[profile].place)
     termtables.print(
         list(make_stats_rows(stats, sort_by)),
-        header=['opponent', 'version', 'game_type', 'n', 'total_score', 'mean_score', 'median_score', 'mean_place', 'median_place'],
+        header=['opponent', 'version', 'game_type', 'n', 'games', 'total_score', 'mean_score', 'median_score', 'mean_place', 'median_place'],
         style=termtables.styles.markdown,
     )
     print()
 
 
 def make_stats_rows(stats, sort_by):
-    for v in sorted((make_row(k, v) for k, v in stats.items()), key=lambda w: w[sort_by]):
+    for v in sorted((make_row(k, n, v) for n, (k, v) in enumerate(stats.items())), key=lambda w: w[sort_by]):
         yield make_stats_row(v)
     total = dict(scores=list(), places=list())
     for k, v in stats.items():
         total['scores'] += v['scores']
         total['places'] += v['places']
     if isinstance(k, str):
-        yield make_stats_row(make_row('total', total))
+        yield make_stats_row(make_row('total', len(stats), total))
     elif isinstance(k, tuple):
-        yield make_stats_row(make_row(['total'] + [''] * (len(k) - 1), total))
+        yield make_stats_row(make_row(['total'] + [''] * (len(k) - 1), len(stats), total))
 
 
-def make_row(key, values):
-    n = len(values['scores'])
+def make_row(key, row, values):
+    games = len(values['scores'])
     return dict(
         key=key,
-        n=n,
+        n=row,
+        games=games,
         total_score=sum(values['scores']),
-        mean_score=statistics.mean(values['scores']) if n > 0 else 0,
-        median_score=statistics.median(values['scores']) if n > 0 else 0,
-        mean_place=statistics.mean(values['places']) if n > 0 else 0,
-        median_place=statistics.median(values['places']) if n > 0 else 0,
+        mean_score=statistics.mean(values['scores']) if games > 0 else 0,
+        median_score=statistics.median(values['scores']) if games > 0 else 0,
+        mean_place=statistics.mean(values['places']) if games > 0 else 0,
+        median_place=statistics.median(values['places']) if games > 0 else 0,
     )
 
 
