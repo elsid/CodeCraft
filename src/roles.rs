@@ -300,58 +300,62 @@ fn get_idle_action() -> EntityAction {
     }
 }
 
-fn get_action_by_plan(unit: &Entity, world: &World, entity_planners: &HashMap<i32, EntityPlanner>) -> Option<EntityAction> {
-    if let Some(planner) = entity_planners.get(&unit.id) {
+fn get_action_by_plan(entity: &Entity, world: &World, entity_planners: &HashMap<i32, EntityPlanner>) -> Option<EntityAction> {
+    if let Some(planner) = entity_planners.get(&entity.id) {
         let plan = planner.plan();
         if !plan.transitions.is_empty() {
-            return Some(match plan.transitions[0] {
-                SimulatedEntityActionType::None => {
-                    EntityAction {
-                        attack_action: None,
-                        build_action: None,
-                        repair_action: None,
-                        move_action: None,
-                    }
-                }
-                SimulatedEntityActionType::Attack { target } => {
-                    EntityAction {
-                        attack_action: Some(AttackAction {
-                            target: Some(target),
-                            auto_attack: None,
-                        }),
-                        build_action: None,
-                        repair_action: None,
-                        move_action: None,
-                    }
-                }
-                SimulatedEntityActionType::MoveEntity { direction } => {
-                    EntityAction {
-                        attack_action: None,
-                        build_action: None,
-                        repair_action: None,
-                        move_action: Some(MoveAction {
-                            target: (unit.position() + direction).as_model(),
-                            find_closest_position: false,
-                            break_through: false,
-                        }),
-                    }
-                }
-                SimulatedEntityActionType::AutoAttack => {
-                    EntityAction {
-                        attack_action: Some(AttackAction {
-                            target: None,
-                            auto_attack: Some(AutoAttack {
-                                pathfind_range: world.get_entity_properties(&unit.entity_type).sight_range,
-                                valid_targets: vec![],
-                            }),
-                        }),
-                        build_action: None,
-                        repair_action: None,
-                        move_action: None,
-                    }
-                }
-            });
+            return Some(make_action(entity, &plan.transitions[0], world));
         }
     }
     None
+}
+
+fn make_action(entity: &Entity, action_type: &SimulatedEntityActionType, world: &World) -> EntityAction {
+    match action_type {
+        SimulatedEntityActionType::None => {
+            EntityAction {
+                attack_action: None,
+                build_action: None,
+                repair_action: None,
+                move_action: None,
+            }
+        }
+        SimulatedEntityActionType::Attack { target } => {
+            EntityAction {
+                attack_action: Some(AttackAction {
+                    target: Some(*target),
+                    auto_attack: None,
+                }),
+                build_action: None,
+                repair_action: None,
+                move_action: None,
+            }
+        }
+        SimulatedEntityActionType::MoveEntity { direction } => {
+            EntityAction {
+                attack_action: None,
+                build_action: None,
+                repair_action: None,
+                move_action: Some(MoveAction {
+                    target: (entity.position() + *direction).as_model(),
+                    find_closest_position: false,
+                    break_through: false,
+                }),
+            }
+        }
+        SimulatedEntityActionType::AutoAttack | SimulatedEntityActionType::AttackInRange => {
+            EntityAction {
+                attack_action: Some(AttackAction {
+                    target: None,
+                    auto_attack: Some(AutoAttack {
+                        pathfind_range: world.get_entity_properties(&entity.entity_type).sight_range,
+                        valid_targets: vec![],
+                    }),
+                }),
+                build_action: None,
+                repair_action: None,
+                move_action: None,
+            }
+        }
+    }
 }

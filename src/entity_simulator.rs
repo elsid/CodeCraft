@@ -49,6 +49,7 @@ pub enum SimulatedEntityActionType {
         direction: Vec2i,
     },
     AutoAttack,
+    AttackInRange,
 }
 
 impl SimulatedEntityActionType {
@@ -148,13 +149,20 @@ impl EntitySimulator {
             entity.available = true;
         }
         for action_index in 0..self.actions.len() {
-            if matches!(self.actions[action_index].action_type, SimulatedEntityActionType::AutoAttack) {
-                let entity_index = self.get_entity_index(self.actions[action_index].entity_id);
-                if self.entities[entity_index].available && self.entities[entity_index].active {
-                    self.actions[action_index].action_type = self.get_auto_attack_action(entity_index, entity_properties);
-                } else {
-                    self.actions[action_index].action_type = SimulatedEntityActionType::None;
+            match self.actions[action_index].action_type {
+                SimulatedEntityActionType::AutoAttack => {
+                    let entity_index = self.get_entity_index(self.actions[action_index].entity_id);
+                    if self.entities[entity_index].available && self.entities[entity_index].active {
+                        self.actions[action_index].action_type = self.get_auto_attack_action(entity_index, entity_properties, true);
+                    } else {
+                        self.actions[action_index].action_type = SimulatedEntityActionType::None;
+                    }
                 }
+                SimulatedEntityActionType::AttackInRange => {
+                    let entity_index = self.get_entity_index(self.actions[action_index].entity_id);
+                    self.actions[action_index].action_type = self.get_auto_attack_action(entity_index, entity_properties, false);
+                }
+                _ => (),
             }
         }
         self.actions.shuffle(rng);
@@ -244,7 +252,7 @@ impl EntitySimulator {
         self.entities[entity_index].position = target_position;
     }
 
-    fn get_auto_attack_action(&mut self, entity_index: usize, entity_properties: &Vec<EntityProperties>) -> SimulatedEntityActionType {
+    fn get_auto_attack_action(&mut self, entity_index: usize, entity_properties: &Vec<EntityProperties>, allow_move: bool) -> SimulatedEntityActionType {
         let entity = &self.entities[entity_index];
         let properties = &entity_properties[entity.entity_type.clone() as usize];
         let entity_bounds = entity.bounds(entity_properties);
@@ -264,10 +272,9 @@ impl EntitySimulator {
             if let Some((distance, target)) = target {
                 if distance <= attack.attack_range {
                     return SimulatedEntityActionType::Attack { target: target.id };
-                } else if properties.can_move {
+                } else if allow_move && properties.can_move {
                     if let Some(next_position) = self.find_shortest_path_next_position(entity.position, target, attack.attack_range, entity_properties) {
                         let direction = next_position - entity.position;
-                        assert_eq!(direction.abs().sum(), 1, "{:?}", direction);
                         return SimulatedEntityActionType::MoveEntity { direction };
                     }
                 }
