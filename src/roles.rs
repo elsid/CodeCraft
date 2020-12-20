@@ -11,7 +11,7 @@ use model::{
     RepairAction,
 };
 
-use crate::my_strategy::{EntityPlanner, Group, Positionable, Rect, SimulatedEntityActionType, SizedRange, Vec2i, World};
+use crate::my_strategy::{Group, Positionable, Rect, SimulatedEntityActionType, SizedRange, Vec2i, World};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Role {
@@ -41,17 +41,18 @@ pub enum Role {
 }
 
 impl Role {
-    pub fn get_action(&self, entity: &Entity, world: &World, groups: &Vec<Group>, entity_targets: &HashMap<i32, Vec2i>, entity_planners: &HashMap<i32, EntityPlanner>) -> EntityAction {
+    pub fn get_action(&self, entity: &Entity, world: &World, groups: &Vec<Group>, entity_targets: &HashMap<i32, Vec2i>,
+                      entity_actions: &HashMap<i32, SimulatedEntityActionType>) -> EntityAction {
         match self {
             Role::Harvester { resource_id } => harvest_resource(entity, world, *resource_id),
             Role::UnitBuilder => build_unit(entity, world),
             Role::BuildingBuilder { position, entity_type } => build_building(entity, world, *position, entity_type),
             Role::BuildingRepairer { building_id: base_id, need_resources } => repair_building(entity, world, *base_id, *need_resources),
-            Role::GroupMember { group_id } => assist_group(entity, world, groups.iter().find(|v| v.id() == *group_id).unwrap(), entity_targets, entity_planners),
+            Role::GroupMember { group_id } => assist_group(entity, world, groups.iter().find(|v| v.id() == *group_id).unwrap(), entity_targets, entity_actions),
             Role::GroupSupplier { .. } => build_unit(entity, world),
             Role::None => get_default_action(entity, world),
             Role::Cleaner { resource_id } => harvest_resource(entity, world, *resource_id),
-            Role::Fighter => fight(entity, world, None, entity_targets, entity_planners),
+            Role::Fighter => fight(entity, world, None, entity_targets, entity_actions),
         }
     }
 
@@ -205,7 +206,8 @@ fn get_target_position_nearby(position: Vec2i, target: Vec2i, size: i32, world: 
     world.find_shortest_path_next_position(position, &SizedRange::new(target, size, 1), false)
 }
 
-fn assist_group(unit: &Entity, world: &World, group: &Group, entity_targets: &HashMap<i32, Vec2i>, entity_planners: &HashMap<i32, EntityPlanner>) -> EntityAction {
+fn assist_group(unit: &Entity, world: &World, group: &Group, entity_targets: &HashMap<i32, Vec2i>,
+                entity_actions: &HashMap<i32, SimulatedEntityActionType>) -> EntityAction {
     let properties = world.get_entity_properties(&unit.entity_type);
     let unit_center = unit.center(properties.size);
     let repair_action = properties.repair.as_ref()
@@ -242,12 +244,13 @@ fn assist_group(unit: &Entity, world: &World, group: &Group, entity_targets: &Ha
             repair_action: Some(repair),
         };
     }
-    fight(unit, world, group.target(), entity_targets, entity_planners)
+    fight(unit, world, group.target(), entity_targets, entity_actions)
 }
 
-fn fight(entity: &Entity, world: &World, default_target: Option<Vec2i>, entity_targets: &HashMap<i32, Vec2i>, entity_planners: &HashMap<i32, EntityPlanner>) -> EntityAction {
-    if let Some(action) = get_action_by_plan(entity, world, entity_planners) {
-        return action;
+fn fight(entity: &Entity, world: &World, default_target: Option<Vec2i>, entity_targets: &HashMap<i32, Vec2i>,
+         entity_actions: &HashMap<i32, SimulatedEntityActionType>) -> EntityAction {
+    if let Some(action_type) = entity_actions.get(&entity.id) {
+        return make_action(entity, action_type, world);
     }
     EntityAction {
         attack_action: Some(AttackAction {
@@ -304,16 +307,6 @@ fn get_idle_action() -> EntityAction {
         repair_action: None,
         move_action: None,
     }
-}
-
-fn get_action_by_plan(entity: &Entity, world: &World, entity_planners: &HashMap<i32, EntityPlanner>) -> Option<EntityAction> {
-    if let Some(planner) = entity_planners.get(&entity.id) {
-        let plan = planner.plan();
-        if !plan.transitions.is_empty() {
-            return Some(make_action(entity, &plan.transitions[0], world));
-        }
-    }
-    None
 }
 
 fn make_action(entity: &Entity, action_type: &SimulatedEntityActionType, world: &World) -> EntityAction {

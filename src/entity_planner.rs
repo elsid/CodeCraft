@@ -206,8 +206,8 @@ impl EntityPlanner {
         result
     }
 
-    fn add_attack_actions(entity: &SimulatedEntity, simulator: &EntitySimulator,
-                          entity_properties: &Vec<EntityProperties>, actions: &mut Vec<SimulatedEntityActionType>) {
+    pub fn add_attack_actions(entity: &SimulatedEntity, simulator: &EntitySimulator,
+                              entity_properties: &Vec<EntityProperties>, actions: &mut Vec<SimulatedEntityActionType>) {
         let properties = &entity_properties[entity.entity_type.clone() as usize];
         if let Some(attack) = properties.attack.as_ref() {
             let map_size = simulator.map_width();
@@ -239,7 +239,7 @@ impl EntityPlanner {
         }
     }
 
-    fn add_move_entity_actions(entity: &SimulatedEntity, map_size: i32, actions: &mut Vec<SimulatedEntityActionType>) {
+    pub fn add_move_entity_actions(entity: &SimulatedEntity, map_size: i32, actions: &mut Vec<SimulatedEntityActionType>) {
         if entity.position.x() + 1 < map_size {
             actions.push(SimulatedEntityActionType::MoveEntity { direction: Vec2i::only_x(1) });
         }

@@ -3,6 +3,7 @@ use std::collections::hash_map;
 use std::collections::HashMap;
 use std::time::Instant;
 
+use cogset::{BruteScan, Dbscan};
 use model::{
     Action,
     Entity,
@@ -17,7 +18,7 @@ use rand::rngs::StdRng;
 
 #[cfg(feature = "enable_debug")]
 use crate::DebugInterface;
-use crate::my_strategy::{build_builders, Config, EntityPlan, EntityPlanner, EntitySimulator, Group, GroupState, harvest_resources, is_active_entity_type, is_protected_entity_type, Positionable, Range, Rect, repair_buildings, Role, Stats, Task, TaskManager, Tile, Vec2i, World};
+use crate::my_strategy::{BattlePlanner, build_builders, Config, EntityPlan, EntityPlanner, EntitySimulator, Group, GroupState, harvest_resources, is_active_entity_type, is_protected_entity_type, Positionable, Range, Rect, repair_buildings, Role, SimulatedEntityActionType, Stats, Task, TaskManager, Tile, Vec2i, World};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::{
     debug,
@@ -43,6 +44,10 @@ pub struct Bot {
     config: Config,
     entity_targets: HashMap<i32, Vec2i>,
     entity_planners: HashMap<i32, EntityPlanner>,
+    battles: Vec<Vec2i>,
+    battlefields: Vec<Battlefield>,
+    battle_planners: Vec<BattlePlanner>,
+    planned_entity_actions: HashMap<i32, SimulatedEntityActionType>,
     rng: RefCell<StdRng>,
 }
 
@@ -60,7 +65,10 @@ impl Drop for Bot {
             "[{}] {} {} {} {:?} {:?} {} {}", self.world.current_tick(),
             stats.total_entity_plan_cost, stats.find_hidden_path_calls, stats.reachability_updates,
             stats.last_tick_duration, stats.max_tick_duration, stats.last_tick_entity_plan_cost,
-            stats.max_tick_entity_plan_cost
+            stats.max_tick_entity_plan_cost,
+            // stats.total_battle_plan_cost, stats.find_hidden_path_calls, stats.reachability_updates,
+            // stats.last_tick_duration, stats.max_tick_duration, stats.last_tick_battle_plan_cost,
+            // stats.max_tick_battle_plan_cost,
         );
     }
 }
@@ -87,6 +95,10 @@ impl Bot {
             },
             entity_targets: HashMap::new(),
             entity_planners: HashMap::new(),
+            battles: Vec::new(),
+            battlefields: Vec::new(),
+            battle_planners: Vec::new(),
+            planned_entity_actions: HashMap::new(),
             rng: RefCell::new(StdRng::seed_from_u64(seed)),
             world: World::new(player_view, config.clone()),
             config,
@@ -118,6 +130,22 @@ impl Bot {
         for entity_planner in self.entity_planners.values() {
             entity_planner.debug_update(self.world.entity_properties(), &mut debug);
         }
+        debug.add_static_text(format!("Battlefields: {}", self.battlefields.len()));
+        for battlefield in self.battlefields.iter() {
+            debug.add_world_rectangle(
+                Vec2f::from(battlefield.bounds.min()),
+                Vec2f::from(battlefield.bounds.max()),
+                Color { a: 0.25, r: 1.0, g: 0.5, b: 0.0 },
+            );
+            debug.add_static_text(format!("{:?}", battlefield));
+        }
+        for battle in self.battles.iter() {
+            debug.add_world_cross(battle.center(), 0.5, Color { a: 1.0, r: 0.5, g: 0.0, b: 0.0 });
+        }
+        debug.add_static_text(format!("Battle plans: {}", self.battle_planners.len()));
+        for battle_planner in self.battle_planners.iter() {
+            battle_planner.debug_update(self.world.entity_properties(), &mut debug);
+        }
         self.tasks.debug_update(&mut debug);
         debug.send(debug_interface);
     }
@@ -132,6 +160,10 @@ impl Bot {
         self.update_groups();
         self.update_tasks();
         self.update_group_targets();
+        self.update_battles();
+        self.update_battlefields();
+        self.planned_entity_actions.clear();
+        self.update_battle_plans();
         self.update_entity_plans();
         self.update_entity_targets();
     }
@@ -186,7 +218,7 @@ impl Bot {
         self.world.my_entities()
             .filter_map(|entity| {
                 self.roles.get(&entity.id)
-                    .map(|role| (entity.id, role.get_action(entity, &self.world, &self.groups, &self.entity_targets, &self.entity_planners)))
+                    .map(|role| (entity.id, role.get_action(entity, &self.world, &self.groups, &self.entity_targets, &self.planned_entity_actions)))
             })
             .filter(|(entity_id, action)| {
                 self.actions.get(&entity_id).map(|v| *v != *action).unwrap_or(true)
@@ -390,7 +422,7 @@ impl Bot {
     }
 
     fn get_entity_target(&self, entity: &Entity, busy: &Vec<(i32, Vec2i)>) -> Option<Vec2i> {
-        if self.entity_planners.contains_key(&entity.id) {
+        if self.planned_entity_actions.contains_key(&entity.id) {
             return None;
         }
         if let Role::GroupMember { group_id } = &self.roles[&entity.id] {
@@ -441,7 +473,8 @@ impl Bot {
         let mut my_entities = Vec::new();
         let mut opponent_entities = Vec::new();
         for my_entity in self.world.my_entities() {
-            if !is_active_entity_type(&my_entity.entity_type, self.world.entity_properties()) {
+            if !is_active_entity_type(&my_entity.entity_type, self.world.entity_properties())
+                || self.planned_entity_actions.contains_key(&my_entity.id) {
                 continue;
             }
             if let Some(attack) = self.world.get_entity_properties(&my_entity.entity_type).attack.as_ref() {
@@ -541,6 +574,11 @@ impl Bot {
             }
         }
         self.stats.borrow_mut().add_entity_plan_cost(plan_cost);
+        for (entity_id, entity_planner) in self.entity_planners.iter() {
+            if !entity_planner.plan().transitions.is_empty() {
+                self.planned_entity_actions.insert(*entity_id, entity_planner.plan().transitions[0].clone());
+            }
+        }
     }
 
     fn make_entity_simulator(&self, entity: &Entity, simulated_entities: &mut usize) -> EntitySimulator {
@@ -592,6 +630,138 @@ impl Bot {
             }
         }
         result
+    }
+
+    fn update_battles(&mut self) {
+        self.battles.clear();
+        for my_unit in self.world.my_entities() {
+            if !is_active_entity_type(&my_unit.entity_type, self.world.entity_properties()) {
+                continue;
+            }
+            let my_properties = self.world.get_entity_properties(&my_unit.entity_type);
+            let my_unit_bounds = my_unit.bounds(my_properties.size);
+            let my_attack_range = my_properties.attack.as_ref().map(|v| v.attack_range).unwrap_or(0);
+            for opponent_unit in self.world.opponent_entities() {
+                if !is_active_entity_type(&opponent_unit.entity_type, self.world.entity_properties()) {
+                    continue;
+                }
+                let opponent_properties = self.world.get_entity_properties(&opponent_unit.entity_type);
+                let opponent_attack_range = opponent_properties.attack.as_ref().map(|v| v.attack_range).unwrap_or(0);
+                let max_attack_range = my_attack_range.max(opponent_attack_range);
+                if max_attack_range == 0 {
+                    continue;
+                }
+                let min_battle_range = max_attack_range + 1;
+                let opponent_bounds = opponent_unit.bounds(opponent_properties.size);
+                if my_unit_bounds.distance(&opponent_bounds) <= min_battle_range {
+                    self.battles.push((my_unit_bounds.center() + opponent_bounds.center()) / 2);
+                }
+            }
+        }
+    }
+
+    fn update_battlefields(&mut self) {
+        self.battlefields.clear();
+        let battles = &self.battles;
+        let scanner = BruteScan::new(&battles);
+        let mut dbscan = Dbscan::new(scanner, 12.0, 1);
+        let battlefields = &mut self.battlefields;
+        let map_size = self.world.map_size();
+        dbscan.by_ref()
+            .for_each(|indices| {
+                let min = indices.iter()
+                    .map(|index| battles[*index])
+                    .fold(battles[indices[0]], |r, position| r.lowest(position));
+                let max = indices.iter()
+                    .map(|index| battles[*index])
+                    .fold(battles[indices[0]], |r, position| r.highest(position));
+                let bounds = Rect::new(
+                    (min - Vec2i::both(6)).highest(Vec2i::zero()),
+                    (max + Vec2i::both(6)).lowest(Vec2i::both(map_size)),
+                );
+                battlefields.push(Battlefield { bounds, battles: indices.len() });
+            });
+    }
+
+    fn update_battle_plans(&mut self) {
+        self.battle_planners.clear();
+        if self.battlefields.is_empty() {
+            return;
+        }
+        let mut simulators = Vec::new();
+        let mut simulated_entities = 0;
+        for battlefield in self.battlefields.iter() {
+            let simulator = EntitySimulator::new(battlefield.bounds.clone(), &self.world);
+            simulated_entities += simulator.entities().iter()
+                .filter(|entity| is_active_entity_type(&entity.entity_type, self.world.entity_properties()))
+                .count();
+            simulators.push(simulator);
+        }
+        let estimated_iteration_cost = 2.0 * simulated_entities as f32;
+        let max_transitions = (
+            (self.config.battle_plan_max_total_cost - self.stats.borrow().total_battle_plan_cost()) as f32
+                / (self.world.max_tick_count() - self.world.current_tick()) as f32
+                / estimated_iteration_cost
+        ).min(self.config.battle_plan_max_transitions as f32)
+            .min(self.config.battle_plan_max_cost_per_tick as f32 / estimated_iteration_cost)
+            .max(1.0)
+            .round() as usize;
+        let mut rng = self.rng.borrow_mut();
+        let mut plan_cost = 0;
+        let mut opponent_plans = Vec::new();
+        for i in 0..self.battlefields.len() {
+            let mut planner = BattlePlanner::new(
+                self.world.players().iter()
+                    .filter(|player| player.id != self.world.my_id())
+                    .map(|player| player.id)
+                    .collect(),
+                self.config.battle_plan_min_depth,
+                self.config.battle_plan_max_depth,
+            );
+            let transitions = planner.update(
+                self.world.map_size(),
+                simulators[i].clone(),
+                self.world.entity_properties(),
+                max_transitions,
+                &[],
+                &mut *rng,
+            );
+            opponent_plans.push(planner.plan().transitions.clone());
+            let world = &self.world;
+            let active_entities = simulators[i].entities().iter()
+                .filter(|entity| is_active_entity_type(&entity.entity_type, world.entity_properties()))
+                .count();
+            plan_cost += transitions * active_entities;
+        }
+        for i in 0..self.battlefields.len() {
+            self.battle_planners.push(BattlePlanner::new(
+                vec![self.world.my_id()],
+                self.config.battle_plan_min_depth,
+                self.config.battle_plan_max_depth,
+            ));
+            let planner = self.battle_planners.last_mut().unwrap();
+            let transitions = planner.update(
+                self.world.map_size(),
+                simulators[i].clone(),
+                self.world.entity_properties(),
+                max_transitions,
+                &opponent_plans[i],
+                &mut *rng,
+            );
+            let world = &self.world;
+            let active_entities = simulators[i].entities().iter()
+                .filter(|entity| is_active_entity_type(&entity.entity_type, world.entity_properties()))
+                .count();
+            plan_cost += transitions * active_entities;
+        }
+        for battle_planner in self.battle_planners.iter() {
+            if !battle_planner.plan().transitions.is_empty() {
+                for action in battle_planner.plan().transitions[0].iter() {
+                    self.planned_entity_actions.insert(action.entity_id, action.action_type.clone());
+                }
+            }
+        }
+        self.stats.borrow_mut().add_battle_plan_cost(plan_cost);
     }
 
     #[cfg(feature = "enable_debug")]
@@ -685,4 +855,10 @@ impl Bot {
             ));
         }
     }
+}
+
+#[derive(Debug)]
+struct Battlefield {
+    bounds: Rect,
+    battles: usize,
 }
