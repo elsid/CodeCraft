@@ -573,14 +573,6 @@ impl World {
             - *self.allocated_resource.borrow()
     }
 
-    pub fn allocated_resource(&self) -> i32 {
-        *self.allocated_resource.borrow()
-    }
-
-    pub fn requested_resource(&self) -> i32 {
-        *self.requested_resource.borrow()
-    }
-
     pub fn force_allocate_resource(&self, amount: i32) {
         *self.allocated_resource.borrow_mut() += amount;
     }
@@ -605,16 +597,12 @@ impl World {
         *self.requested_resource.borrow_mut() -= amount;
     }
 
-    pub fn my_population_provide(&self) -> i32 {
+    fn population_space(&self) -> i32 {
         self.population_provide - self.population_use - *self.allocated_population.borrow()
     }
 
-    pub fn allocated_population(&self) -> i32 {
-        *self.allocated_population.borrow()
-    }
-
     pub fn try_allocated_resource_and_population(&self, resource: i32, population: i32) -> bool {
-        if self.my_resource() < resource || self.my_population_provide() < population {
+        if self.my_resource() < resource || self.population_space() < population {
             return false;
         }
         *self.allocated_resource.borrow_mut() += resource;
@@ -637,10 +625,10 @@ impl World {
         debug.add_static_text(format!("Tick {}", self.current_tick));
         debug.add_static_text(format!("Players power: {:?}", (0..self.players.len()).map(|i| (self.players[i].id, self.player_power[i])).collect::<BTreeMap<_, _>>()));
         debug.add_static_text(format!("Players last activity: {:?}", (0..self.players.len()).map(|i| (self.players[i].id, self.last_player_activity[i])).collect::<BTreeMap<_, _>>()));
-        let allocated = self.allocated_resource();
-        let requested = self.requested_resource();
+        let allocated = *self.allocated_resource.borrow();
+        let requested = *self.requested_resource.borrow();
         debug.add_static_text(format!("Resource: {} - {} a - {} r = {}", self.my_player().resource, allocated, requested, self.my_resource()));
-        debug.add_static_text(format!("Population: {} - {} a = {}", self.population_use(), self.allocated_population(), self.my_population_provide()));
+        debug.add_static_text(format!("Population: {} - {} - {} a = {}", self.population_provide, self.population_use, self.allocated_population.borrow(), self.population_space()));
         let mut count_by_entity_type: BTreeMap<String, usize> = BTreeMap::new();
         for entity in self.my_entities() {
             match count_by_entity_type.entry(format!("{:?}", entity.entity_type)) {

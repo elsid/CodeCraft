@@ -552,7 +552,7 @@ impl Bot {
             let properties = self.world.get_entity_properties(&entity.entity_type);
             let position = Vec2f::from(entity.position()) + Vec2f::both(properties.size as f32) / 2.0;
             debug.add_world_text(
-                format!("{} ({}, {})", entity.id, entity.position.x, entity.position.y),
+                format!("{} ({}, {}) {}", entity.id, entity.position.x, entity.position.y, entity.active),
                 position,
                 Vec2f::zero(),
                 Color { a: 1.0, r: 0.7, g: 0.5, b: 0.2 },
