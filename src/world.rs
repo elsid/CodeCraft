@@ -551,27 +551,12 @@ impl World {
             has_place_for_entity && has_space_around
         };
         let map = self.map.borrow();
-        let start = if house {
-            let x = if self.start_position.x() < self.map_size / 2 {
-                0
-            } else {
-                self.map_size - 1
-            };
-            let y = if self.start_position.y() < self.map_size / 2 {
-                0
-            } else {
-                self.map_size - 1
-            };
-            Vec2i::new(x, y)
-        } else {
-            self.start_position
-        };
-        if fit(&map, start) {
-            return Some(start);
+        if fit(&map, self.start_position) {
+            return Some(self.start_position);
         }
         for radius in 1..self.protected_radius() {
             let result = map.find_on_square_border(
-                start - Vec2i::both(radius),
+                self.start_position - Vec2i::both(radius),
                 2 * radius + 1,
                 |v, _, _| fit(&map, v),
             );
