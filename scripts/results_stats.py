@@ -12,7 +12,7 @@ import statistics
 import sys
 import termtables
 
-from collections import defaultdict, Counter
+from collections import defaultdict
 
 
 def main():
@@ -142,18 +142,15 @@ def show_ratio_plot(pyplot, name, values):
 
 
 def show_metric_plot(pyplot, stats, metric):
-    try:
-        fig, ax = pyplot.subplots()
-        fig.canvas.set_window_title(metric)
-        ax.set_title(metric)
-        for player, values in stats[metric].items():
-            ax.plot(numpy.arange(0, len(values), 1), values, label=player)
-        total = functools.reduce(operator.add, stats[metric].values())
-        ax.plot(numpy.arange(0, len(total), 1), total, label='total')
-        ax.grid(True)
-        ax.legend()
-    except ValueError as e:
-        print(e)
+    fig, ax = pyplot.subplots()
+    fig.canvas.set_window_title(metric)
+    ax.set_title(metric)
+    for player, values in stats[metric].items():
+        ax.plot(numpy.arange(0, len(values), 1), values, label=player)
+    total = functools.reduce(operator.add, stats[metric].values())
+    ax.plot(numpy.arange(0, len(total), 1), total, label='total')
+    ax.grid(True)
+    ax.legend()
 
 
 def show_plot(pyplot, name, values):
@@ -280,26 +277,35 @@ def show_max_tick_duration_distribution_plot(pyplot, stats, player):
 
 
 def get_stats(games):
+    players = set()
+    for game in games:
+        for player in game['results'].keys():
+            players.add(player)
     draws = 0
     zero_draws = 0
     fails = 0
     durations = list()
-    players = set()
-    wins = Counter()
-    losses = Counter()
-    places = defaultdict(Counter)
-    crashes = Counter()
-    positions = defaultdict(Counter)
-    places_positions = defaultdict(lambda: defaultdict(Counter))
+    wins = {v: 0 for v in players}
+    losses = {v: 0 for v in players}
+    places = defaultdict(lambda: {v: 0 for v in players})
+    crashes = {v: 0 for v in players}
+    positions = defaultdict(lambda: {v: 0 for v in players})
+    places_positions = defaultdict(lambda: defaultdict(lambda: {v: 0 for v in players}))
     seeds = set()
-    scores = defaultdict(list)
-    places_dynamic = defaultdict(list)
-    positions_dynamic = defaultdict(list)
-    wins_dynamic = defaultdict(list)
-    losses_dynamic = defaultdict(list)
-    place_score = Counter()
-    bot_stats = defaultdict(lambda: defaultdict(list))
+    scores = {v: list() for v in players}
+    places_dynamic = {v: list() for v in players}
+    positions_dynamic = {v: list() for v in players}
+    wins_dynamic = {v: list() for v in players}
+    losses_dynamic = {v: list() for v in players}
+    place_score = {v: 0 for v in players}
+    bot_stats = defaultdict(lambda: {v: list() for v in players})
     for number, game in enumerate(games):
+        for player in players:
+            scores[player].append(0)
+            positions_dynamic[player].append(0)
+            places_dynamic[player].append(0)
+            wins_dynamic[player].append(0)
+            losses_dynamic[player].append(0)
         fails += game['code'] != 0
         durations.append(game['duration'])
         game_scores = numpy.array(sorted(v['score'] for v in game['results'].values()))
@@ -313,29 +319,24 @@ def get_stats(games):
         if 1 == sum(1 for v in game_scores if v == max_score):
             winner = next(k for k, v in game['results'].items() if v['score'] == max_score)
             wins[winner] += 1
-            wins_dynamic[winner].append(1)
+            wins_dynamic[winner][-1] = 1
         if 1 == sum(1 for v in game_scores if v == min_score):
             loser = next(k for k, v in game['results'].items() if v['score'] == min_score)
             losses[loser] += 1
-            losses_dynamic[loser].append(1)
+            losses_dynamic[loser][-1] = 1
         for place, score in enumerate(unique_game_scores):
             for k, v in game['results'].items():
                 if v['score'] == score:
                     places[place + 1][k] += 1
-                    places_dynamic[k].append(place + 1)
+                    places_dynamic[k][-1] = place + 1
                     places_positions[place + 1][v['position']][k] += 1
                     place_score[k] += get_place_score(place + 1)
         for k, v in game['results'].items():
-            players.add(k)
             if v['crashed']:
                 crashes[k] += 1
-            scores[k].append(v['score'])
+            scores[k][-1] = v['score']
             positions[v['position']][k] += 1
-            positions_dynamic[k].append(v['position'])
-            if len(wins_dynamic[k]) < number + 1:
-                wins_dynamic[k].append(0)
-            if len(losses_dynamic[k]) < number + 1:
-                losses_dynamic[k].append(0)
+            positions_dynamic[k][-1] = v['position']
         seeds.add(game['seed'])
         for player, data in game.get('stats', dict()).items():
             for k, v in data.items():
