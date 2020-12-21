@@ -78,19 +78,6 @@ impl World {
         for (entity_type, v) in player_view.entity_properties.iter() {
             entity_properties[entity_type.clone() as usize] = v.clone();
         }
-        let first_builder_position = player_view.entities.iter()
-            .find(|v| v.player_id == Some(player_view.my_id) && matches!(v.entity_type, EntityType::BuilderUnit)).unwrap()
-            .position();
-        let (start_position_x, grow_direction_x) = if first_builder_position.x() < player_view.map_size / 2 {
-            (0, 1)
-        } else {
-            (player_view.map_size - 1, -1)
-        };
-        let (start_position_y, grow_direction_y) = if first_builder_position.y() < player_view.map_size / 2 {
-            (0, 1)
-        } else {
-            (player_view.map_size - 1, -1)
-        };
         Self {
             my_id: player_view.my_id,
             map_size: player_view.map_size,
@@ -108,8 +95,8 @@ impl World {
             map: RefCell::new(Map::new(player_view.map_size as usize)),
             population_use: 0,
             population_provide: 0,
-            start_position: Vec2i::new(start_position_x, start_position_y),
-            grow_direction: Vec2i::new(grow_direction_x, grow_direction_y),
+            start_position: Vec2i::zero(),
+            grow_direction: Vec2i::new(1, 1),
             requested_resource: RefCell::new(0),
             allocated_resource: RefCell::new(0),
             allocated_population: RefCell::new(0),
@@ -117,7 +104,7 @@ impl World {
             player_power: std::iter::repeat(0).take(player_view.players.len()).collect(),
             is_attacked_by_opponent: std::iter::repeat(false).take((player_view.map_size * player_view.map_size) as usize).collect(),
             last_player_activity: std::iter::repeat(player_view.current_tick).take(player_view.players.len()).collect(),
-            base_center: Vec2i::new(start_position_x, start_position_y),
+            base_center: Vec2i::zero(),
             reachability_map: RefCell::new(ReachabilityMap::new(player_view.map_size as usize)),
             known_map_resource: 0,
             predicted_map_resource: 0.0,
