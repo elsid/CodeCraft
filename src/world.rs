@@ -859,7 +859,39 @@ impl World {
     }
 
     pub fn get_player_position(&self, player_id: i32) -> Vec2i {
-        get_player_position(player_id, self.map_size)
+        let player_index = match self.my_id {
+            1 => player_id,
+            2 => match player_id {
+                1 => 2,
+                2 => 1,
+                3 => 4,
+                4 => 3,
+                _ => 1,
+            }
+            3 => match player_id {
+                1 => 3,
+                2 => 4,
+                3 => 1,
+                4 => 2,
+                _ => 1,
+            }
+            4 => match player_id {
+                1 => 4,
+                2 => 3,
+                3 => 2,
+                4 => 1,
+                _ => 1,
+            }
+            _ => player_id,
+        };
+        let builder_base_size = self.get_entity_properties(&EntityType::BuilderBase).size;
+        match player_index {
+            1 => Vec2i::both(5),
+            2 => Vec2i::both(self.map_size - builder_base_size - 5),
+            3 => Vec2i::new(self.map_size - builder_base_size - 5, 5),
+            4 => Vec2i::new(5, self.map_size - builder_base_size - 5),
+            _ => Vec2i::both(self.map_size / 2),
+        }
     }
 
     pub fn is_reachable_from_base(&self, position: Vec2i) -> bool {
@@ -886,15 +918,5 @@ pub fn is_protected_entity_type(entity_type: &EntityType) -> bool {
         EntityType::RangedBase => true,
         EntityType::BuilderUnit => true,
         _ => false,
-    }
-}
-
-pub fn get_player_position(player_id: i32, map_size: i32) -> Vec2i {
-    match player_id {
-        1 => Vec2i::both(10),
-        2 => Vec2i::both(map_size - 10),
-        3 => Vec2i::new(map_size - 10, 10),
-        4 => Vec2i::new(10, map_size - 10),
-        _ => Vec2i::both(map_size / 2),
     }
 }

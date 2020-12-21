@@ -124,7 +124,7 @@ impl Bot {
 
     fn update(&mut self, player_view: &PlayerView) {
         if player_view.current_tick == 0 && player_view.fog_of_war {
-            self.world.update(&extend_player_view(player_view), &mut *self.stats.borrow_mut());
+            self.world.update(&self.extend_player_view(player_view), &mut *self.stats.borrow_mut());
         } else {
             self.world.update(player_view, &mut *self.stats.borrow_mut());
         }
@@ -576,6 +576,24 @@ impl Bot {
         entity_planner.plan().clone()
     }
 
+    fn extend_player_view(&self, player_view: &PlayerView) -> PlayerView {
+        let mut result = player_view.clone();
+        for player in player_view.players.iter() {
+            if player.id != player_view.my_id {
+                let properties = &player_view.entity_properties[&EntityType::BuilderBase];
+                result.entities.push(Entity {
+                    player_id: Some(player.id),
+                    position: self.world.get_player_position(player.id).as_model(),
+                    entity_type: EntityType::BuilderBase,
+                    id: -player.id,
+                    health: properties.max_health,
+                    active: true,
+                });
+            }
+        }
+        result
+    }
+
     #[cfg(feature = "enable_debug")]
     fn debug_update_entities(&self, debug: &mut debug::Debug) {
         for entity in self.world.my_entities() {
@@ -666,37 +684,5 @@ impl Bot {
                 group.id(), group.has(), group.position(), group.target(), group.state()
             ));
         }
-    }
-}
-
-fn extend_player_view(player_view: &PlayerView) -> PlayerView {
-    let mut result = player_view.clone();
-    for player in player_view.players.iter() {
-        if player.id != player_view.my_id {
-            let properties = &player_view.entity_properties[&EntityType::BuilderBase];
-            result.entities.push(Entity {
-                player_id: Some(player.id),
-                position: get_player_initial_builder_base_position(
-                    player.id,
-                    player_view.map_size,
-                    properties.size,
-                ).as_model(),
-                entity_type: EntityType::BuilderBase,
-                id: -player.id,
-                health: properties.max_health,
-                active: true,
-            });
-        }
-    }
-    result
-}
-
-fn get_player_initial_builder_base_position(player_id: i32, map_size: i32, builder_base_size: i32) -> Vec2i {
-    match player_id {
-        1 => Vec2i::both(5),
-        2 => Vec2i::both(map_size - builder_base_size - 5),
-        3 => Vec2i::new(map_size - builder_base_size - 5, 5),
-        4 => Vec2i::new(5, map_size - builder_base_size - 5),
-        _ => Vec2i::both(map_size / 2),
     }
 }
