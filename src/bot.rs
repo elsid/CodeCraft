@@ -132,8 +132,8 @@ impl Bot {
         self.update_groups();
         self.update_tasks();
         self.update_group_targets();
-        self.update_entity_targets();
         self.update_entity_plans();
+        self.update_entity_targets();
     }
 
     fn update_roles(&mut self) {
@@ -390,52 +390,42 @@ impl Bot {
     }
 
     fn get_entity_target(&self, entity: &Entity, busy: &Vec<(i32, Vec2i)>) -> Option<Vec2i> {
-        let properties = self.world.get_entity_properties(&entity.entity_type);
+        if self.entity_planners.contains_key(&entity.id) {
+            return None;
+        }
         if let Role::GroupMember { group_id } = &self.roles[&entity.id] {
-            let opponent_nearby = self.world.find_in_map_range(entity.position(), properties.size, properties.sight_range, |_, tile, _| {
-                if let Tile::Entity(entity_id) = tile {
-                    let other = self.world.get_entity(entity_id);
-                    (matches!(other.entity_type, EntityType::RangedUnit)
-                        || matches!(other.entity_type, EntityType::MeleeUnit)
-                        || matches!(other.entity_type, EntityType::Turret))
-                        && other.player_id.map(|v| v != self.world.my_id()).unwrap_or(false)
-                } else {
-                    false
-                }
-            }).is_some();
-            if !opponent_nearby {
-                let group = self.groups.iter().find(|v| v.id() == *group_id).unwrap();
-                if let Some(group_target) = group.target()
-                    .filter(|target| target.distance(entity.position()) <= properties.sight_range) {
-                    let mut min_distance = std::i32::MAX;
-                    let mut nearest_free_position = None;
-                    self.world.visit_map_range(group_target, properties.size, properties.sight_range, |position, tile, locked| {
-                        if locked || busy.iter().any(|(_, v)| *v == position) {
+            let properties = self.world.get_entity_properties(&entity.entity_type);
+            let group = self.groups.iter().find(|v| v.id() == *group_id).unwrap();
+            if let Some(group_target) = group.target()
+                .filter(|target| target.distance(entity.position()) <= properties.sight_range) {
+                let mut min_distance = std::i32::MAX;
+                let mut nearest_free_position = None;
+                self.world.visit_map_range(group_target, properties.size, properties.sight_range, |position, tile, locked| {
+                    if locked || busy.iter().any(|(_, v)| *v == position) {
+                        return;
+                    }
+                    if let Tile::Entity(entity_id) = tile {
+                        if entity_id != entity.id {
                             return;
                         }
-                        if let Tile::Entity(entity_id) = tile {
-                            if entity_id != entity.id {
-                                return;
-                            }
-                        }
-                        let distance = position.distance(group_target);
-                        if min_distance > distance {
-                            min_distance = distance;
-                            nearest_free_position = Some(position);
-                        }
-                    });
-                    if let Some(target) = nearest_free_position {
-                        return if self.world.is_tile_cached(target) {
-                            self.stats.borrow_mut().add_find_hidden_path_calls(1);
-                            self.world.find_shortest_path_next_position(
-                                entity.position(),
-                                &Range::new(target, properties.sight_range),
-                                true,
-                            )
-                        } else {
-                            Some(target)
-                        };
                     }
+                    let distance = position.distance(group_target);
+                    if min_distance > distance {
+                        min_distance = distance;
+                        nearest_free_position = Some(position);
+                    }
+                });
+                if let Some(target) = nearest_free_position {
+                    return if self.world.is_tile_cached(target) {
+                        self.stats.borrow_mut().add_find_hidden_path_calls(1);
+                        self.world.find_shortest_path_next_position(
+                            entity.position(),
+                            &Range::new(target, properties.sight_range),
+                            true,
+                        )
+                    } else {
+                        Some(target)
+                    };
                 }
             }
         }
