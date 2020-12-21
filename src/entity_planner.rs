@@ -212,17 +212,18 @@ impl EntityPlanner {
             let map_size = simulator.map_width();
             let bounds = simulator.bounds();
             if simulator.entities().len() < (attack.attack_range * attack.attack_range) as usize {
+                let entity_bounds = entity.bounds(entity_properties);
                 for target in simulator.entities().iter() {
                     if target.id == entity.id {
                         continue;
                     }
                     if target.player_id.is_some() && target.player_id != entity.player_id
-                        && target.bounds(entity_properties).distance_to_position(entity.position) <= attack.attack_range {
+                        && target.bounds(entity_properties).distance(&entity_bounds) <= attack.attack_range {
                         actions.push(SimulatedEntityActionType::Attack { target: target.id });
                     }
                 }
             } else {
-                visit_range(entity.position, 1, attack.attack_range, &bounds, |position| {
+                visit_range(entity.position, properties.size, attack.attack_range, &bounds, |position| {
                     if position == entity.position {
                         return;
                     }
