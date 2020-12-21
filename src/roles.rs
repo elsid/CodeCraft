@@ -37,6 +37,7 @@ pub enum Role {
     Cleaner {
         resource_id: i32,
     },
+    Fighter,
 }
 
 impl Role {
@@ -50,6 +51,7 @@ impl Role {
             Role::GroupSupplier { .. } => build_unit(entity, world),
             Role::None => get_default_action(entity, world),
             Role::Cleaner { resource_id } => harvest_resource(entity, world, *resource_id),
+            Role::Fighter => fight(entity, world, None, entity_targets, entity_planners),
         }
     }
 
@@ -240,20 +242,24 @@ fn assist_group(unit: &Entity, world: &World, group: &Group, entity_targets: &Ha
             repair_action: Some(repair),
         };
     }
-    if let Some(action) = get_action_by_plan(unit, world, entity_planners) {
+    fight(unit, world, group.target(), entity_targets, entity_planners)
+}
+
+fn fight(entity: &Entity, world: &World, default_target: Option<Vec2i>, entity_targets: &HashMap<i32, Vec2i>, entity_planners: &HashMap<i32, EntityPlanner>) -> EntityAction {
+    if let Some(action) = get_action_by_plan(entity, world, entity_planners) {
         return action;
     }
     EntityAction {
         attack_action: Some(AttackAction {
             target: None,
             auto_attack: Some(AutoAttack {
-                pathfind_range: properties.sight_range,
+                pathfind_range: world.get_entity_properties(&entity.entity_type).sight_range,
                 valid_targets: vec![],
             }),
         }),
         build_action: None,
         repair_action: None,
-        move_action: entity_targets.get(&unit.id).cloned().or_else(|| group.target())
+        move_action: entity_targets.get(&entity.id).cloned().or(default_target)
             .map(|position| MoveAction {
                 target: position.as_model(),
                 find_closest_position: true,

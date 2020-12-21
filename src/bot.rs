@@ -141,7 +141,11 @@ impl Bot {
         self.roles.retain(|id, _| world.contains_entity(*id));
         for entity in self.world.my_entities() {
             if let hash_map::Entry::Vacant(v) = self.roles.entry(entity.id) {
-                v.insert(Role::None);
+                let role = match &entity.entity_type {
+                    EntityType::Turret => Role::Fighter,
+                    _ => Role::None,
+                };
+                v.insert(role);
             }
         }
         for role in self.roles.values_mut() {
@@ -446,7 +450,7 @@ impl Bot {
         }
         let units: Vec<&Entity> = self.world.my_units()
             .filter(|entity| {
-                if !matches!(self.roles[&entity.id], Role::GroupMember { .. }) {
+                if !matches!(self.roles[&entity.id], Role::GroupMember { .. } | Role::Fighter) {
                     return false;
                 }
                 let properties = self.world.get_entity_properties(&entity.entity_type);
