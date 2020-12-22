@@ -3,6 +3,10 @@ use std::collections::HashMap;
 #[allow(unused_imports)]
 pub use bot::*;
 #[allow(unused_imports)]
+pub use build_planner::*;
+#[allow(unused_imports)]
+pub use build_simulator::*;
+#[allow(unused_imports)]
 pub use config::*;
 #[allow(unused_imports)]
 pub use entity::*;
@@ -36,6 +40,12 @@ pub use vec2::*;
 pub use world::*;
 
 use super::DebugInterface;
+
+#[path = "build_simulator.rs"]
+pub mod build_simulator;
+
+#[path = "build_planner.rs"]
+pub mod build_planner;
 
 #[path = "range.rs"]
 pub mod range;

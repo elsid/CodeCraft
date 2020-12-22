@@ -72,17 +72,11 @@ pub struct World {
 
 impl World {
     pub fn new(player_view: &PlayerView, config: Config) -> Self {
-        let mut entity_properties: Vec<EntityProperties> = std::iter::repeat(EntityProperties::default())
-            .take(player_view.entity_properties.len())
-            .collect();
-        for (entity_type, v) in player_view.entity_properties.iter() {
-            entity_properties[entity_type.clone() as usize] = v.clone();
-        }
         Self {
             my_id: player_view.my_id,
             map_size: player_view.map_size,
             fog_of_war: player_view.fog_of_war,
-            entity_properties,
+            entity_properties: make_entity_properties_vec(&player_view.entity_properties),
             max_tick_count: player_view.max_tick_count,
             max_pathfind_nodes: player_view.max_pathfind_nodes,
             current_tick: player_view.current_tick,
@@ -906,4 +900,14 @@ pub fn is_protected_entity_type(entity_type: &EntityType) -> bool {
         EntityType::BuilderUnit => true,
         _ => false,
     }
+}
+
+pub fn make_entity_properties_vec(entity_properties: &HashMap<EntityType, EntityProperties>) -> Vec<EntityProperties> {
+    let mut result: Vec<EntityProperties> = std::iter::repeat(EntityProperties::default())
+        .take(entity_properties.len())
+        .collect();
+    for (entity_type, v) in entity_properties.iter() {
+        result[entity_type.clone() as usize] = v.clone();
+    }
+    result
 }
