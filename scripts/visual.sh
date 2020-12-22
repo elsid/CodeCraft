@@ -23,3 +23,5 @@ mkdir -p ${SRC}/results/temp
 ./aicup2020 \
     --config ${SRC}/etc/${CONFIG:?}.json \
     --save-results ${SRC}/results/temp/${ID}.results.json
+
+cat ${SRC}/results/temp/${ID}.results.json

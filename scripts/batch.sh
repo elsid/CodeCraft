@@ -24,3 +24,5 @@ mkdir -p ${SRC}/results/temp
     --batch-mode \
     --config ${SRC}/etc/${CONFIG:?}.json \
     --save-results ${SRC}/results/temp/${ID}.results.json
+
+cat ${SRC}/results/temp/${ID}.results.json
