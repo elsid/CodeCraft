@@ -180,15 +180,32 @@ impl EntitySimulator {
                 }
             }
         }
-        for action_index in 0..self.actions.len() {
-            if let SimulatedEntityActionType::MoveEntity { direction } = self.actions[action_index].action_type.clone() {
-                let entity_index = self.get_entity_index(self.actions[action_index].entity_id);
-                if !self.entities[entity_index].available || !self.entities[entity_index].active
-                    || self.entities[entity_index].health <= 0 {
+        self.actions.retain(|action| {
+            matches!(&action.action_type, SimulatedEntityActionType::MoveEntity { .. })
+        });
+        let mut left_moves = self.actions.len();
+        let mut completed_moves: Vec<bool> = std::iter::repeat(false).take(left_moves).collect();
+        loop {
+            let left_moves_before = left_moves;
+            for action_index in 0..self.actions.len() {
+                if completed_moves[action_index] {
                     continue;
                 }
-                self.move_entity(entity_index, direction, entity_properties);
-                self.entities[entity_index].available = false;
+                if let SimulatedEntityActionType::MoveEntity { direction } = self.actions[action_index].action_type.clone() {
+                    let entity_index = self.get_entity_index(self.actions[action_index].entity_id);
+                    if !self.entities[entity_index].available || !self.entities[entity_index].active
+                        || self.entities[entity_index].health <= 0 {
+                        continue;
+                    }
+                    if self.move_entity(entity_index, direction, entity_properties) {
+                        self.entities[entity_index].available = false;
+                        left_moves -= 1;
+                        completed_moves[action_index] = true;
+                    }
+                }
+            }
+            if left_moves == 0 || left_moves_before == left_moves {
+                break;
             }
         }
         self.actions.clear();
@@ -237,17 +254,17 @@ impl EntitySimulator {
         }
     }
 
-    fn move_entity(&mut self, entity_index: usize, direction: Vec2i, entity_properties: &Vec<EntityProperties>) {
+    fn move_entity(&mut self, entity_index: usize, direction: Vec2i, entity_properties: &Vec<EntityProperties>) -> bool {
         let properties = &entity_properties[self.entities[entity_index].entity_type.clone() as usize];
         if !properties.can_move {
-            return;
+            return true;
         }
         let position = self.entities[entity_index].position;
         let target_position = position + direction;
         if self.bounds.contains(target_position) {
             let target_position_index = position_to_index(target_position - self.shift(), self.map_width());
             if self.tiles[target_position_index].is_some() {
-                return;
+                return false;
             }
             self.tiles[target_position_index] = Some(self.entities[entity_index].id);
         }
@@ -255,6 +272,7 @@ impl EntitySimulator {
         let map_width = self.map_width;
         self.tiles[position_to_index(position - shift, map_width)] = None;
         self.entities[entity_index].position = target_position;
+        true
     }
 
     fn get_auto_attack_action(&mut self, entity_index: usize, entity_properties: &Vec<EntityProperties>, allow_move: bool) -> SimulatedEntityActionType {
@@ -440,6 +458,30 @@ mod tests {
                     health: entity_properties[&EntityType::MeleeUnit].max_health,
                     active: true,
                 },
+                Entity {
+                    id: 6,
+                    player_id: Some(1),
+                    entity_type: EntityType::MeleeUnit,
+                    position: Vec2I32 { x: 50, y: 50 },
+                    health: entity_properties[&EntityType::MeleeUnit].max_health,
+                    active: true,
+                },
+                Entity {
+                    id: 7,
+                    player_id: Some(1),
+                    entity_type: EntityType::MeleeUnit,
+                    position: Vec2I32 { x: 51, y: 50 },
+                    health: entity_properties[&EntityType::MeleeUnit].max_health,
+                    active: true,
+                },
+                Entity {
+                    id: 8,
+                    player_id: Some(1),
+                    entity_type: EntityType::MeleeUnit,
+                    position: Vec2I32 { x: 52, y: 50 },
+                    health: entity_properties[&EntityType::MeleeUnit].max_health,
+                    active: true,
+                },
             ],
             entity_properties,
         }
@@ -483,6 +525,32 @@ mod tests {
         simulator.simulate(world.entity_properties(), &mut rng);
         assert_eq!(simulator.entities()[0].id, 1);
         assert_eq!(simulator.entities()[0].position, Vec2i::new(21, 20));
+    }
+
+    #[test]
+    fn simulate_move_with_substitution() {
+        let world = new_world();
+        let mut simulator = EntitySimulator::new(Rect::new(Vec2i::both(40), Vec2i::both(60)), &world);
+        let mut rng = StdRng::seed_from_u64(42);
+        simulator.add_action(SimulatedEntityAction {
+            entity_id: 6,
+            action_type: SimulatedEntityActionType::MoveEntity { direction: Vec2i::new(1, 0) },
+        });
+        simulator.add_action(SimulatedEntityAction {
+            entity_id: 7,
+            action_type: SimulatedEntityActionType::MoveEntity { direction: Vec2i::new(1, 0) },
+        });
+        simulator.add_action(SimulatedEntityAction {
+            entity_id: 8,
+            action_type: SimulatedEntityActionType::MoveEntity { direction: Vec2i::new(1, 0) },
+        });
+        simulator.simulate(world.entity_properties(), &mut rng);
+        assert_eq!(simulator.entities()[0].id, 6);
+        assert_eq!(simulator.entities()[0].position, Vec2i::new(51, 50));
+        assert_eq!(simulator.entities()[1].id, 7);
+        assert_eq!(simulator.entities()[1].position, Vec2i::new(52, 50));
+        assert_eq!(simulator.entities()[2].id, 8);
+        assert_eq!(simulator.entities()[2].position, Vec2i::new(53, 50));
     }
 
     #[test]
