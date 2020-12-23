@@ -85,10 +85,9 @@ impl EntityPlanner {
 
         let mut max_score = std::i32::MIN;
         let mut optimal_final_state_index = None;
-        let mut iteration = 0;
+        let mut transitions = 0;
 
         while let Some((score, state_index)) = frontier.pop() {
-            iteration += 1;
             let depth = self.states[state_index].depth;
             if depth >= self.min_depth {
                 if max_score < score {
@@ -99,7 +98,7 @@ impl EntityPlanner {
                     continue;
                 }
             }
-            if self.transitions.len() >= max_transitions {
+            if transitions >= max_transitions {
                 continue;
             }
             let entity = if let Some(entity) = self.states[state_index].simulator.entities().iter()
@@ -123,10 +122,11 @@ impl EntityPlanner {
             actions.push(SimulatedEntityActionType::None);
             actions.shuffle(rng);
             for action_type in actions.into_iter() {
-                if self.transitions.len() >= max_transitions {
+                if transitions >= max_transitions {
                     break;
                 }
                 frontier.push(self.add_transition(action_type, &other_actions, state_index, entity_properties, rng));
+                transitions += 1;
             }
         }
 
@@ -138,7 +138,7 @@ impl EntityPlanner {
             })
             .unwrap_or_else(|| EntityPlan::default());
 
-        iteration
+        transitions
     }
 
     #[cfg(feature = "enable_debug")]
@@ -313,4 +313,77 @@ impl EntityPlanner {
 pub fn is_active_entity_type(entity_type: &EntityType, entity_properties: &Vec<EntityProperties>) -> bool {
     !matches!(*entity_type, EntityType::BuilderUnit)
         && entity_properties[entity_type.clone() as usize].attack.is_some()
+}
+
+#[cfg(test)]
+mod tests {
+    use model::{Entity, Player, PlayerView, Vec2I32};
+    use rand::rngs::StdRng;
+    use rand::SeedableRng;
+
+    use crate::my_strategy::{Config, examples, Rect, Stats, World};
+
+    use super::*;
+
+    fn new_player_view() -> PlayerView {
+        let entity_properties = examples::entity_properties();
+        PlayerView {
+            my_id: 1,
+            map_size: 80,
+            fog_of_war: false,
+            max_tick_count: 1000,
+            max_pathfind_nodes: 1000,
+            current_tick: 0,
+            players: vec![
+                Player {
+                    id: 1,
+                    score: 0,
+                    resource: 0,
+                },
+                Player {
+                    id: 2,
+                    score: 0,
+                    resource: 0,
+                },
+            ],
+            entities: vec![
+                Entity {
+                    id: 1,
+                    player_id: Some(1),
+                    entity_type: EntityType::RangedUnit,
+                    position: Vec2I32 { x: 30, y: 30 },
+                    health: entity_properties[&EntityType::RangedUnit].max_health,
+                    active: true,
+                },
+                Entity {
+                    id: 2,
+                    player_id: Some(2),
+                    entity_type: EntityType::MeleeUnit,
+                    position: Vec2I32 { x: 30, y: 35 },
+                    health: 35,
+                    active: true,
+                },
+            ],
+            entity_properties,
+        }
+    }
+
+    fn new_world() -> World {
+        let player_view = new_player_view();
+        let mut world = World::new(&player_view, Config::new());
+        let mut stats = Stats::default();
+        world.update(&player_view, &mut stats);
+        world
+    }
+
+    #[test]
+    fn plan() {
+        let world = new_world();
+        let simulator = EntitySimulator::new(Rect::new(Vec2i::both(20), Vec2i::both(40)), &world);
+        let mut rng = StdRng::seed_from_u64(42);
+        let mut planner = EntityPlanner::new(1, 1, 1, 4);
+        let transitions = planner.update(world.map_size(), simulator, world.entity_properties(), 200, &[], &mut rng);
+        assert!(!planner.plan().transitions.is_empty(), "iterations={}", transitions);
+        assert_eq!((planner.plan().score, transitions), (40, 200), "{:?}", planner.plan().transitions);
+    }
 }
