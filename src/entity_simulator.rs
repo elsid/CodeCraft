@@ -7,7 +7,7 @@ use rand::seq::SliceRandom;
 
 use crate::my_strategy::{index_to_position, position_to_index, Positionable, Rect, Tile, Vec2i, visit_reversed_shortest_path, visit_square_with_bounds, World};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SimulatedPlayer {
     pub id: i32,
     pub score: i32,
@@ -15,7 +15,7 @@ pub struct SimulatedPlayer {
     pub damage_received: i32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SimulatedEntity {
     pub id: i32,
     pub entity_type: EntityType,

@@ -1,5 +1,6 @@
 use std::collections::BinaryHeap;
 
+use itertools::Itertools;
 use model::{EntityProperties, EntityType};
 #[cfg(feature = "enable_debug")]
 use model::Color;
@@ -24,6 +25,7 @@ struct State {
     pub depth: usize,
     pub simulator: EntitySimulator,
     pub transition: Option<usize>,
+    pub open: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -78,6 +80,7 @@ impl EntityPlanner {
             depth: 0,
             simulator,
             transition: None,
+            open: false,
         });
 
         let mut frontier: BinaryHeap<(i32, usize)> = BinaryHeap::new();
@@ -115,6 +118,7 @@ impl EntityPlanner {
             if !has_active_opponents {
                 continue;
             }
+            self.states[state_index].open = true;
             let other_actions = self.get_other_actions(&self.states[state_index], entity_properties, plans);
             let mut actions = Vec::new();
             Self::add_attack_actions(&entity, &self.states[state_index].simulator, entity_properties, &mut actions);
@@ -125,7 +129,9 @@ impl EntityPlanner {
                 if transitions >= max_transitions {
                     break;
                 }
-                frontier.push(self.add_transition(action_type, other_actions.clone(), state_index, entity_properties, rng));
+                if let Some(transition) = self.add_transition(action_type, other_actions.clone(), state_index, entity_properties, rng) {
+                    frontier.push(transition);
+                }
                 transitions += 1;
             }
         }
@@ -263,23 +269,46 @@ impl EntityPlanner {
     }
 
     fn add_transition<R: Rng>(&mut self, action_type: SimulatedEntityActionType, mut actions: Vec<SimulatedEntityAction>,
-                              state_index: usize, entity_properties: &Vec<EntityProperties>, rng: &mut R) -> (i32, usize) {
-        let transition_index = self.transitions.len();
-        self.transitions.push(Transition { state_index, action_type: action_type.clone() });
-        let new_state_index = self.states.len();
-        self.states.push(self.states[state_index].clone());
-        let new_state = &mut self.states[new_state_index];
-        new_state.transition = Some(transition_index);
+                              state_index: usize, entity_properties: &Vec<EntityProperties>, rng: &mut R) -> Option<(i32, usize)> {
+        let mut new_state = self.states[state_index].clone();
+        new_state.depth += 1;
         actions.push(SimulatedEntityAction {
             entity_id: self.entity_id,
-            action_type,
+            action_type: action_type.clone(),
         });
         new_state.simulator.simulate(entity_properties, &mut actions, rng);
-        new_state.depth += 1;
-        (
-            self.get_score(&self.states[new_state_index].simulator),
-            new_state_index,
-        )
+        let score = self.get_score(&new_state.simulator);
+        let new_state_index = if let Some((index, state)) = self.states.iter()
+            .find_position(|state| {
+                (state.depth, state.simulator.players(), state.simulator.entities())
+                    == (new_state.depth, new_state.simulator.players(), new_state.simulator.entities())
+            }) {
+            if self.get_score(&state.simulator) >= score {
+                return None;
+            } else {
+                index
+            }
+        } else {
+            self.states.len()
+        };
+        if new_state_index == self.states.len() {
+            let transition_index = self.transitions.len();
+            self.transitions.push(Transition { state_index, action_type });
+            new_state.transition = Some(transition_index);
+            new_state.open = false;
+            self.states.push(new_state);
+        } else {
+            let transition_index = self.states[new_state_index].transition.unwrap();
+            self.transitions[transition_index].state_index = state_index;
+            self.transitions[transition_index].action_type = action_type;
+            self.states[new_state_index].depth = new_state.depth;
+            self.states[new_state_index].simulator = new_state.simulator;
+            if !self.states[new_state_index].open {
+                return None;
+            }
+            self.states[new_state_index].open = false;
+        }
+        Some((score, new_state_index))
     }
 
     fn get_score(&self, simulator: &EntitySimulator) -> i32 {
