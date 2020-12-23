@@ -7,15 +7,14 @@ use rand::seq::SliceRandom;
 
 use crate::my_strategy::{index_to_position, position_to_index, Positionable, Rect, Tile, Vec2i, visit_reversed_shortest_path, visit_square_with_bounds, World};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SimulatedPlayer {
     pub id: i32,
     pub score: i32,
-    pub damage_done: i32,
-    pub damage_received: i32,
+    pub destroy_score_saved: i32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SimulatedEntity {
     pub id: i32,
     pub entity_type: EntityType,
@@ -105,8 +104,7 @@ impl EntitySimulator {
                 .map(|player| SimulatedPlayer {
                     id: player.id,
                     score: 0,
-                    damage_done: 0,
-                    damage_received: 0,
+                    destroy_score_saved: 0,
                 })
                 .collect(),
         }
@@ -233,13 +231,9 @@ impl EntitySimulator {
             if entity_bounds.distance(&target_bounds) > attack.attack_range {
                 return;
             }
-            let health = self.entities[target_index].health;
             self.entities[target_index].health -= attack.damage;
-            if let Some(target_player_id) = self.entities[target_index].player_id {
-                let damage = health - self.entities[target_index].health;
-                self.players.iter_mut().find(|v| v.id == target_player_id).unwrap().damage_received += damage;
+            if self.entities[target_index].player_id.is_some() {
                 if let Some(entity_player_id) = self.entities[entity_index].player_id {
-                    self.players.iter_mut().find(|v| v.id == entity_player_id).unwrap().damage_done += damage;
                     if self.entities[target_index].health <= 0 {
                         self.players.iter_mut().find(|v| v.id == entity_player_id).unwrap().score += target_properties.destroy_score;
                     }
@@ -261,6 +255,8 @@ impl EntitySimulator {
                 return false;
             }
             self.tiles[target_position_index] = Some(self.entities[entity_index].id);
+        } else if let Some(entity_player_id) = self.entities[entity_index].player_id {
+            self.players.iter_mut().find(|v| v.id == entity_player_id).unwrap().destroy_score_saved += properties.destroy_score;
         }
         let shift = self.shift();
         let map_width = self.map_width;
@@ -499,10 +495,6 @@ mod tests {
         assert_eq!(simulator.players()[1].id, 2);
         assert_eq!(simulator.players()[0].score, 0);
         assert_eq!(simulator.players()[1].score, 0);
-        assert_eq!(simulator.players()[0].damage_received, 0);
-        assert_eq!(simulator.players()[1].damage_received, 0);
-        assert_eq!(simulator.players()[0].damage_done, 0);
-        assert_eq!(simulator.players()[1].damage_done, 0);
     }
 
     #[test]
@@ -643,9 +635,5 @@ mod tests {
         assert_eq!(simulator.players()[1].id, 2);
         assert_eq!(simulator.players()[0].score, 500);
         assert_eq!(simulator.players()[1].score, 500);
-        assert_eq!(simulator.players()[0].damage_received, 60);
-        assert_eq!(simulator.players()[1].damage_received, 60);
-        assert_eq!(simulator.players()[0].damage_done, 60);
-        assert_eq!(simulator.players()[1].damage_done, 60);
     }
 }

@@ -21,15 +21,16 @@ pub struct EntityPlan {
 
 #[derive(Clone, Debug)]
 struct State {
-    pub depth: usize,
-    pub simulator: EntitySimulator,
-    pub transition: Option<usize>,
+    depth: usize,
+    simulator: EntitySimulator,
+    transition: Option<usize>,
+    cost: i32,
 }
 
 #[derive(Clone, Debug)]
 struct Transition {
-    pub state_index: usize,
-    pub action_type: SimulatedEntityActionType,
+    state_index: usize,
+    action_type: SimulatedEntityActionType,
 }
 
 pub struct EntityPlanner {
@@ -74,24 +75,29 @@ impl EntityPlanner {
                           plans: &[(i32, EntityPlan)], rng: &mut R) -> usize {
         self.states.clear();
         self.transitions.clear();
+
         self.states.push(State {
             depth: 0,
             simulator,
             transition: None,
+            cost: 0,
         });
 
         let mut frontier: BinaryHeap<(i32, usize)> = BinaryHeap::new();
         frontier.push((0, 0));
 
         let mut max_score = std::i32::MIN;
+        let mut max_score_depth = 0;
         let mut optimal_final_state_index = None;
         let mut transitions = 0;
 
-        while let Some((score, state_index)) = frontier.pop() {
+        while let Some((_, state_index)) = frontier.pop() {
             let depth = self.states[state_index].depth;
+            let score = self.get_score(&self.states[state_index].simulator);
             if depth >= self.min_depth {
-                if max_score < score {
+                if max_score < score || max_score <= score && max_score_depth < depth {
                     max_score = score;
+                    max_score_depth = depth;
                     optimal_final_state_index = Some(state_index);
                 }
                 if depth >= self.max_depth {
@@ -264,34 +270,93 @@ impl EntityPlanner {
 
     fn add_transition<R: Rng>(&mut self, action_type: SimulatedEntityActionType, mut actions: Vec<SimulatedEntityAction>,
                               state_index: usize, entity_properties: &Vec<EntityProperties>, rng: &mut R) -> (i32, usize) {
-        let transition_index = self.transitions.len();
-        self.transitions.push(Transition { state_index, action_type: action_type.clone() });
         let new_state_index = self.states.len();
         self.states.push(self.states[state_index].clone());
-        let new_state = &mut self.states[new_state_index];
-        new_state.transition = Some(transition_index);
+        let transition_index = self.transitions.len();
+        self.transitions.push(Transition { state_index, action_type: action_type.clone() });
+        self.states[new_state_index].depth += 1;
         actions.push(SimulatedEntityAction {
             entity_id: self.entity_id,
             action_type,
         });
-        new_state.simulator.simulate(entity_properties, &mut actions, rng);
-        new_state.depth += 1;
-        (
-            self.get_score(&self.states[new_state_index].simulator),
-            new_state_index,
-        )
+        self.states[new_state_index].simulator.simulate(entity_properties, &mut actions, rng);
+        let transition_cost = self.get_cost(&self.states[state_index].simulator, &self.states[new_state_index].simulator);
+        let cost = self.states[state_index].cost + transition_cost;
+        self.states[new_state_index].transition = Some(transition_index);
+        self.states[new_state_index].cost = cost;
+        (-cost, new_state_index)
     }
 
     fn get_score(&self, simulator: &EntitySimulator) -> i32 {
-        simulator.players().iter()
-            .map(|player| {
-                if player.id == self.player_id {
-                    player.score + player.damage_done - player.damage_received
-                } else {
-                    player.damage_received - player.damage_done - player.score
-                }
-            })
-            .sum()
+        let mut my_score_gained = 0;
+        let mut opponent_score_gained = 0;
+        let mut my_destroy_score_saved = 0;
+        let mut opponent_destroy_score_saved = 0;
+        for player in simulator.players().iter() {
+            if player.id == self.player_id {
+                my_score_gained += player.score;
+                my_destroy_score_saved += player.destroy_score_saved;
+            } else {
+                opponent_score_gained += player.score;
+                opponent_destroy_score_saved += player.destroy_score_saved;
+            }
+        }
+        let my_health: i32 = simulator.entities().iter()
+            .filter(|entity| entity.player_id == Some(self.player_id))
+            .map(|entity| entity.health)
+            .sum();
+        let opponent_health: i32 = simulator.entities().iter()
+            .filter(|entity| entity.player_id.is_some() && entity.player_id != Some(self.player_id))
+            .map(|entity| entity.health)
+            .sum();
+        0
+            + my_score_gained
+            - opponent_score_gained
+            + my_destroy_score_saved
+            - opponent_destroy_score_saved
+            + my_health
+            - opponent_health
+    }
+
+    fn get_cost(&self, src: &EntitySimulator, dst: &EntitySimulator) -> i32 {
+        let mut my_score_gained = 0;
+        let mut opponent_score_gained = 0;
+        let mut my_destroy_score_saved = 0;
+        let mut opponent_destroy_score_saved = 0;
+        for i in 0..src.players().len() {
+            if src.players()[i].id == self.player_id {
+                my_score_gained += dst.players()[i].score - src.players()[i].score;
+                my_destroy_score_saved += dst.players()[i].destroy_score_saved - src.players()[i].destroy_score_saved;
+            } else {
+                opponent_score_gained += dst.players()[i].score - src.players()[i].score;
+                opponent_destroy_score_saved += dst.players()[i].destroy_score_saved - src.players()[i].destroy_score_saved;
+            }
+        }
+        let src_my_health: i32 = src.entities().iter()
+            .filter(|entity| entity.player_id == Some(self.player_id))
+            .map(|entity| entity.health)
+            .sum();
+        let dst_my_health: i32 = dst.entities().iter()
+            .filter(|entity| entity.player_id == Some(self.player_id))
+            .map(|entity| entity.health)
+            .sum();
+        let my_health_lost = src_my_health - dst_my_health;
+        let src_opponent_health: i32 = src.entities().iter()
+            .filter(|entity| entity.player_id.is_some() && entity.player_id != Some(self.player_id))
+            .map(|entity| entity.health)
+            .sum();
+        let dst_opponent_health: i32 = dst.entities().iter()
+            .filter(|entity| entity.player_id.is_some() && entity.player_id != Some(self.player_id))
+            .map(|entity| entity.health)
+            .sum();
+        let opponent_health_lost = src_opponent_health - dst_opponent_health;
+        0
+            - my_score_gained
+            + opponent_score_gained
+            + my_health_lost
+            - opponent_health_lost
+            - my_destroy_score_saved
+            + opponent_destroy_score_saved
     }
 
     fn reconstruct_sequence(&self, mut state_index: usize) -> Vec<SimulatedEntityActionType> {
@@ -321,7 +386,7 @@ mod tests {
 
     use super::*;
 
-    fn new_player_view() -> PlayerView {
+    fn player_view_1() -> PlayerView {
         let entity_properties = examples::entity_properties();
         PlayerView {
             my_id: 1,
@@ -356,7 +421,7 @@ mod tests {
                     player_id: Some(2),
                     entity_type: EntityType::MeleeUnit,
                     position: Vec2I32 { x: 30, y: 35 },
-                    health: 35,
+                    health: entity_properties[&EntityType::MeleeUnit].max_health,
                     active: true,
                 },
             ],
@@ -364,8 +429,7 @@ mod tests {
         }
     }
 
-    fn new_world() -> World {
-        let player_view = new_player_view();
+    fn new_world(player_view: PlayerView) -> World {
         let mut world = World::new(&player_view, Config::new());
         let mut stats = Stats::default();
         world.update(&player_view, &mut stats);
@@ -373,13 +437,75 @@ mod tests {
     }
 
     #[test]
-    fn plan() {
-        let world = new_world();
+    fn plan_1() {
+        let world = new_world(player_view_1());
         let simulator = EntitySimulator::new(Rect::new(Vec2i::both(20), Vec2i::both(40)), &world);
         let mut rng = StdRng::seed_from_u64(42);
-        let mut planner = EntityPlanner::new(1, 1, 1, 4);
+        let mut planner = EntityPlanner::new(1, 1, 1, 17);
         let transitions = planner.update(world.map_size(), simulator, world.entity_properties(), 200, &[], &mut rng);
         assert!(!planner.plan().transitions.is_empty(), "iterations={}", transitions);
-        assert_eq!((planner.plan().score, transitions), (40, 200), "{:?}", planner.plan().transitions);
+        assert_eq!((planner.plan().score, transitions), (-20, 200), "{:?}", planner.plan().transitions);
+    }
+
+    fn player_view_2() -> PlayerView {
+        let entity_properties = examples::entity_properties();
+        PlayerView {
+            my_id: 1,
+            map_size: 80,
+            fog_of_war: false,
+            max_tick_count: 1000,
+            max_pathfind_nodes: 1000,
+            current_tick: 0,
+            players: vec![
+                Player {
+                    id: 1,
+                    score: 0,
+                    resource: 0,
+                },
+                Player {
+                    id: 2,
+                    score: 0,
+                    resource: 0,
+                },
+            ],
+            entities: vec![
+                Entity {
+                    id: 1,
+                    player_id: Some(1),
+                    entity_type: EntityType::RangedUnit,
+                    position: Vec2I32 { x: 30, y: 29 },
+                    health: entity_properties[&EntityType::RangedUnit].max_health,
+                    active: true,
+                },
+                Entity {
+                    id: 2,
+                    player_id: Some(2),
+                    entity_type: EntityType::RangedUnit,
+                    position: Vec2I32 { x: 30, y: 35 },
+                    health: entity_properties[&EntityType::RangedUnit].max_health,
+                    active: true,
+                },
+                Entity {
+                    id: 3,
+                    player_id: Some(2),
+                    entity_type: EntityType::RangedUnit,
+                    position: Vec2I32 { x: 31, y: 35 },
+                    health: entity_properties[&EntityType::RangedUnit].max_health,
+                    active: true,
+                },
+            ],
+            entity_properties,
+        }
+    }
+
+    #[test]
+    fn plan_2() {
+        let world = new_world(player_view_2());
+        let simulator = EntitySimulator::new(Rect::new(Vec2i::both(20), Vec2i::both(40)), &world);
+        let mut rng = StdRng::seed_from_u64(42);
+        let mut planner = EntityPlanner::new(1, 1, 1, 17);
+        let transitions = planner.update(world.map_size(), simulator, world.entity_properties(), 200, &[], &mut rng);
+        assert!(!planner.plan().transitions.is_empty(), "iterations={}", transitions);
+        assert_eq!((planner.plan().score, transitions), (-10, 200), "{:?}", planner.plan().transitions);
     }
 }
