@@ -125,7 +125,7 @@ impl EntityPlanner {
                 if transitions >= max_transitions {
                     break;
                 }
-                frontier.push(self.add_transition(action_type, &other_actions, state_index, entity_properties, rng));
+                frontier.push(self.add_transition(action_type, other_actions.clone(), state_index, entity_properties, rng));
                 transitions += 1;
             }
         }
@@ -262,7 +262,7 @@ impl EntityPlanner {
         }
     }
 
-    fn add_transition<R: Rng>(&mut self, action_type: SimulatedEntityActionType, other_actions: &Vec<SimulatedEntityAction>,
+    fn add_transition<R: Rng>(&mut self, action_type: SimulatedEntityActionType, mut actions: Vec<SimulatedEntityAction>,
                               state_index: usize, entity_properties: &Vec<EntityProperties>, rng: &mut R) -> (i32, usize) {
         let transition_index = self.transitions.len();
         self.transitions.push(Transition { state_index, action_type: action_type.clone() });
@@ -270,15 +270,11 @@ impl EntityPlanner {
         self.states.push(self.states[state_index].clone());
         let new_state = &mut self.states[new_state_index];
         new_state.transition = Some(transition_index);
-        let action = SimulatedEntityAction {
+        actions.push(SimulatedEntityAction {
             entity_id: self.entity_id,
             action_type,
-        };
-        new_state.simulator.add_action(action.clone());
-        for action in other_actions.iter() {
-            new_state.simulator.add_action(action.clone());
-        }
-        new_state.simulator.simulate(entity_properties, rng);
+        });
+        new_state.simulator.simulate(entity_properties, &mut actions, rng);
         new_state.depth += 1;
         (
             self.get_score(&self.states[new_state_index].simulator),

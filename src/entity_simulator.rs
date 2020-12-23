@@ -68,7 +68,6 @@ pub struct EntitySimulator {
     map_width: usize,
     entities: Vec<SimulatedEntity>,
     tiles: Vec<Option<i32>>,
-    actions: Vec<SimulatedEntityAction>,
     players: Vec<SimulatedPlayer>,
 }
 
@@ -110,7 +109,6 @@ impl EntitySimulator {
                     damage_received: 0,
                 })
                 .collect(),
-            actions: Vec::new(),
         }
     }
 
@@ -142,35 +140,31 @@ impl EntitySimulator {
         self.entities.iter().find(|v| v.id == entity_id).unwrap()
     }
 
-    pub fn add_action(&mut self, action: SimulatedEntityAction) {
-        self.actions.push(action);
-    }
-
-    pub fn simulate<R: Rng>(&mut self, entity_properties: &Vec<EntityProperties>, rng: &mut R) {
+    pub fn simulate<R: Rng>(&mut self, entity_properties: &Vec<EntityProperties>, actions: &mut Vec<SimulatedEntityAction>, rng: &mut R) {
         for entity in self.entities.iter_mut() {
             entity.available = true;
         }
-        for action_index in 0..self.actions.len() {
-            match self.actions[action_index].action_type {
+        for action in actions.iter_mut() {
+            match action.action_type {
                 SimulatedEntityActionType::AutoAttack => {
-                    let entity_index = self.get_entity_index(self.actions[action_index].entity_id);
+                    let entity_index = self.get_entity_index(action.entity_id);
                     if self.entities[entity_index].available && self.entities[entity_index].active {
-                        self.actions[action_index].action_type = self.get_auto_attack_action(entity_index, entity_properties, true);
+                        action.action_type = self.get_auto_attack_action(entity_index, entity_properties, true);
                     } else {
-                        self.actions[action_index].action_type = SimulatedEntityActionType::None;
+                        action.action_type = SimulatedEntityActionType::None;
                     }
                 }
                 SimulatedEntityActionType::AttackInRange => {
-                    let entity_index = self.get_entity_index(self.actions[action_index].entity_id);
-                    self.actions[action_index].action_type = self.get_auto_attack_action(entity_index, entity_properties, false);
+                    let entity_index = self.get_entity_index(action.entity_id);
+                    action.action_type = self.get_auto_attack_action(entity_index, entity_properties, false);
                 }
                 _ => (),
             }
         }
-        self.actions.shuffle(rng);
-        for action_index in 0..self.actions.len() {
-            if let SimulatedEntityActionType::Attack { target } = self.actions[action_index].action_type.clone() {
-                let entity_index = self.get_entity_index(self.actions[action_index].entity_id);
+        actions.shuffle(rng);
+        for action in actions.iter() {
+            if let SimulatedEntityActionType::Attack { target } = action.action_type.clone() {
+                let entity_index = self.get_entity_index(action.entity_id);
                 if !self.entities[entity_index].available || !self.entities[entity_index].active {
                     continue;
                 }
@@ -180,19 +174,19 @@ impl EntitySimulator {
                 }
             }
         }
-        self.actions.retain(|action| {
+        actions.retain(|action| {
             matches!(&action.action_type, SimulatedEntityActionType::MoveEntity { .. })
         });
-        let mut left_moves = self.actions.len();
+        let mut left_moves = actions.len();
         let mut completed_moves: Vec<bool> = std::iter::repeat(false).take(left_moves).collect();
         loop {
             let left_moves_before = left_moves;
-            for action_index in 0..self.actions.len() {
+            for action_index in 0..actions.len() {
                 if completed_moves[action_index] {
                     continue;
                 }
-                if let SimulatedEntityActionType::MoveEntity { direction } = self.actions[action_index].action_type.clone() {
-                    let entity_index = self.get_entity_index(self.actions[action_index].entity_id);
+                if let SimulatedEntityActionType::MoveEntity { direction } = actions[action_index].action_type.clone() {
+                    let entity_index = self.get_entity_index(actions[action_index].entity_id);
                     if !self.entities[entity_index].available || !self.entities[entity_index].active
                         || self.entities[entity_index].health <= 0 {
                         continue;
@@ -208,7 +202,7 @@ impl EntitySimulator {
                 break;
             }
         }
-        self.actions.clear();
+        actions.clear();
         let bounds = self.bounds().clone();
         for i in 0..self.entities.len() {
             if self.entities[i].health <= 0 {
@@ -498,7 +492,7 @@ mod tests {
         let world = new_world();
         let mut simulator = EntitySimulator::new(Rect::new(Vec2i::both(20), Vec2i::both(40)), &world);
         let mut rng = StdRng::seed_from_u64(42);
-        simulator.simulate(world.entity_properties(), &mut rng);
+        simulator.simulate(world.entity_properties(), &mut Vec::new(), &mut rng);
         assert_eq!(simulator.entities().len(), 5);
         assert_eq!(simulator.players().len(), 2);
         assert_eq!(simulator.players()[0].id, 1);
@@ -516,11 +510,11 @@ mod tests {
         let world = new_world();
         let mut simulator = EntitySimulator::new(Rect::new(Vec2i::both(20), Vec2i::both(40)), &world);
         let mut rng = StdRng::seed_from_u64(42);
-        simulator.add_action(SimulatedEntityAction {
+        let mut actions = vec![SimulatedEntityAction {
             entity_id: 1,
             action_type: SimulatedEntityActionType::MoveEntity { direction: Vec2i::new(1, 0) },
-        });
-        simulator.simulate(world.entity_properties(), &mut rng);
+        }];
+        simulator.simulate(world.entity_properties(), &mut actions, &mut rng);
         assert_eq!(simulator.entities()[0].id, 1);
         assert_eq!(simulator.entities()[0].position, Vec2i::new(21, 20));
     }
@@ -530,19 +524,21 @@ mod tests {
         let world = new_world();
         let mut simulator = EntitySimulator::new(Rect::new(Vec2i::both(40), Vec2i::both(60)), &world);
         let mut rng = StdRng::seed_from_u64(42);
-        simulator.add_action(SimulatedEntityAction {
-            entity_id: 6,
-            action_type: SimulatedEntityActionType::MoveEntity { direction: Vec2i::new(1, 0) },
-        });
-        simulator.add_action(SimulatedEntityAction {
-            entity_id: 7,
-            action_type: SimulatedEntityActionType::MoveEntity { direction: Vec2i::new(1, 0) },
-        });
-        simulator.add_action(SimulatedEntityAction {
-            entity_id: 8,
-            action_type: SimulatedEntityActionType::MoveEntity { direction: Vec2i::new(1, 0) },
-        });
-        simulator.simulate(world.entity_properties(), &mut rng);
+        let mut actions = vec![
+            SimulatedEntityAction {
+                entity_id: 6,
+                action_type: SimulatedEntityActionType::MoveEntity { direction: Vec2i::new(1, 0) },
+            },
+            SimulatedEntityAction {
+                entity_id: 7,
+                action_type: SimulatedEntityActionType::MoveEntity { direction: Vec2i::new(1, 0) },
+            },
+            SimulatedEntityAction {
+                entity_id: 8,
+                action_type: SimulatedEntityActionType::MoveEntity { direction: Vec2i::new(1, 0) },
+            }
+        ];
+        simulator.simulate(world.entity_properties(), &mut actions, &mut rng);
         assert_eq!(simulator.entities()[0].id, 6);
         assert_eq!(simulator.entities()[0].position, Vec2i::new(51, 50));
         assert_eq!(simulator.entities()[1].id, 7);
@@ -556,11 +552,11 @@ mod tests {
         let world = new_world();
         let mut simulator = EntitySimulator::new(Rect::new(Vec2i::both(20), Vec2i::both(40)), &world);
         let mut rng = StdRng::seed_from_u64(42);
-        simulator.add_action(SimulatedEntityAction {
+        let mut actions = vec![SimulatedEntityAction {
             entity_id: 1,
             action_type: SimulatedEntityActionType::MoveEntity { direction: Vec2i::new(-1, 0) },
-        });
-        simulator.simulate(world.entity_properties(), &mut rng);
+        }];
+        simulator.simulate(world.entity_properties(), &mut actions, &mut rng);
         assert_eq!(simulator.entities().len(), 4);
         assert!(!simulator.entities().iter().any(|v| v.id == 1));
     }
@@ -570,13 +566,13 @@ mod tests {
         let world = new_world();
         let mut simulator = EntitySimulator::new(Rect::new(Vec2i::both(20), Vec2i::both(40)), &world);
         let mut rng = StdRng::seed_from_u64(42);
-        simulator.add_action(SimulatedEntityAction {
+        let mut actions = vec![SimulatedEntityAction {
             entity_id: 2,
             action_type: SimulatedEntityActionType::Attack { target: 3 },
-        });
+        }];
         assert_eq!(simulator.entities()[2].id, 3);
         assert_eq!(simulator.entities()[2].health, 10);
-        simulator.simulate(world.entity_properties(), &mut rng);
+        simulator.simulate(world.entity_properties(), &mut actions, &mut rng);
         assert_eq!(simulator.entities()[2].id, 3);
         assert_eq!(simulator.entities()[2].health, 5);
     }
@@ -586,13 +582,13 @@ mod tests {
         let world = new_world();
         let mut simulator = EntitySimulator::new(Rect::new(Vec2i::both(20), Vec2i::both(40)), &world);
         let mut rng = StdRng::seed_from_u64(42);
-        simulator.add_action(SimulatedEntityAction {
+        let mut actions = vec![SimulatedEntityAction {
             entity_id: 4,
             action_type: SimulatedEntityActionType::Attack { target: 5 },
-        });
+        }];
         assert_eq!(simulator.entities()[4].id, 5);
         assert_eq!(simulator.entities()[4].health, 50);
-        simulator.simulate(world.entity_properties(), &mut rng);
+        simulator.simulate(world.entity_properties(), &mut actions, &mut rng);
         assert_eq!(simulator.entities()[4].id, 5);
         assert_eq!(simulator.entities()[4].health, 50);
     }
@@ -602,13 +598,13 @@ mod tests {
         let world = new_world();
         let mut simulator = EntitySimulator::new(Rect::new(Vec2i::both(20), Vec2i::both(40)), &world);
         let mut rng = StdRng::seed_from_u64(42);
-        simulator.add_action(SimulatedEntityAction {
+        let mut actions = vec![SimulatedEntityAction {
             entity_id: 3,
             action_type: SimulatedEntityActionType::AutoAttack,
-        });
+        }];
         assert_eq!(simulator.entities()[1].id, 2);
         assert_eq!(simulator.entities()[1].health, 10);
-        simulator.simulate(world.entity_properties(), &mut rng);
+        simulator.simulate(world.entity_properties(), &mut actions, &mut rng);
         assert_eq!(simulator.entities()[1].id, 2);
         assert_eq!(simulator.entities()[1].health, 5);
     }
@@ -618,13 +614,13 @@ mod tests {
         let world = new_world();
         let mut simulator = EntitySimulator::new(Rect::new(Vec2i::both(20), Vec2i::both(40)), &world);
         let mut rng = StdRng::seed_from_u64(42);
-        simulator.add_action(SimulatedEntityAction {
+        let mut actions = vec![SimulatedEntityAction {
             entity_id: 5,
             action_type: SimulatedEntityActionType::AutoAttack,
-        });
+        }];
         assert_eq!(simulator.entities()[4].id, 5);
         assert_eq!(simulator.entities()[4].position, Vec2i::new(35, 35));
-        simulator.simulate(world.entity_properties(), &mut rng);
+        simulator.simulate(world.entity_properties(), &mut actions, &mut rng);
         assert_eq!(simulator.entities()[4].id, 5);
         assert_eq!(simulator.entities()[4].position, Vec2i::new(34, 35));
     }
@@ -635,13 +631,13 @@ mod tests {
         let mut simulator = EntitySimulator::new(Rect::new(Vec2i::both(20), Vec2i::both(40)), &world);
         let mut rng = StdRng::seed_from_u64(42);
         while simulator.entities().len() > 1 {
-            for i in 0..simulator.entities().len() {
-                simulator.add_action(SimulatedEntityAction {
+            let mut actions: Vec<SimulatedEntityAction> = (0..simulator.entities().len())
+                .map(|i| SimulatedEntityAction {
                     entity_id: simulator.entities()[i].id,
                     action_type: SimulatedEntityActionType::AutoAttack,
-                });
-            }
-            simulator.simulate(world.entity_properties(), &mut rng);
+                })
+                .collect();
+            simulator.simulate(world.entity_properties(), &mut actions, &mut rng);
         }
         assert_eq!(simulator.players()[0].id, 1);
         assert_eq!(simulator.players()[1].id, 2);
