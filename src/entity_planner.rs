@@ -108,6 +108,14 @@ impl EntityPlanner {
             } else {
                 continue;
             };
+            let has_active_opponents = self.states[state_index].simulator.entities().iter()
+                .any(|entity| {
+                    entity.player_id.is_some() && entity.player_id != Some(self.player_id)
+                        && is_active_entity_type(&entity.entity_type, entity_properties)
+                });
+            if !has_active_opponents {
+                continue;
+            }
             let other_actions = self.get_other_actions(&self.states[state_index], entity_properties, plans);
             let mut actions = Vec::new();
             Self::add_attack_actions(&entity, &self.states[state_index].simulator, entity_properties, &mut actions);
