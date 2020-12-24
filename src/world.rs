@@ -373,6 +373,10 @@ impl World {
         self.map.borrow().is_tile_cached(position)
     }
 
+    pub fn get_tile_cache_lifetime(&self, position: Vec2i) -> i32 {
+        self.map.borrow().get_tile_cache_lifetime(position)
+    }
+
     pub fn population_use(&self) -> i32 {
         self.population_use
     }
