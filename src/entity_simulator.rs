@@ -12,7 +12,6 @@ pub struct SimulatedPlayer {
     pub id: i32,
     pub score: i32,
     pub damage_done: i32,
-    pub damage_received: i32,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -106,7 +105,6 @@ impl EntitySimulator {
                     id: player.id,
                     score: 0,
                     damage_done: 0,
-                    damage_received: 0,
                 })
                 .collect(),
         }
@@ -235,9 +233,8 @@ impl EntitySimulator {
             }
             let health = self.entities[target_index].health;
             self.entities[target_index].health -= attack.damage;
-            if let Some(target_player_id) = self.entities[target_index].player_id {
+            if self.entities[target_index].player_id.is_some() {
                 let damage = health - self.entities[target_index].health;
-                self.players.iter_mut().find(|v| v.id == target_player_id).unwrap().damage_received += damage;
                 if let Some(entity_player_id) = self.entities[entity_index].player_id {
                     self.players.iter_mut().find(|v| v.id == entity_player_id).unwrap().damage_done += damage;
                     if self.entities[target_index].health <= 0 {
@@ -499,8 +496,6 @@ mod tests {
         assert_eq!(simulator.players()[1].id, 2);
         assert_eq!(simulator.players()[0].score, 0);
         assert_eq!(simulator.players()[1].score, 0);
-        assert_eq!(simulator.players()[0].damage_received, 0);
-        assert_eq!(simulator.players()[1].damage_received, 0);
         assert_eq!(simulator.players()[0].damage_done, 0);
         assert_eq!(simulator.players()[1].damage_done, 0);
     }
@@ -643,8 +638,6 @@ mod tests {
         assert_eq!(simulator.players()[1].id, 2);
         assert_eq!(simulator.players()[0].score, 500);
         assert_eq!(simulator.players()[1].score, 500);
-        assert_eq!(simulator.players()[0].damage_received, 60);
-        assert_eq!(simulator.players()[1].damage_received, 60);
         assert_eq!(simulator.players()[0].damage_done, 60);
         assert_eq!(simulator.players()[1].damage_done, 60);
     }

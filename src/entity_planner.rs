@@ -22,16 +22,17 @@ pub struct EntityPlan {
 
 #[derive(Clone, Debug)]
 struct State {
-    pub depth: usize,
-    pub simulator: EntitySimulator,
-    pub transition: Option<usize>,
-    pub open: bool,
+    depth: usize,
+    simulator: EntitySimulator,
+    transition: Option<usize>,
+    open: bool,
+    cost: i32,
 }
 
 #[derive(Clone, Debug)]
 struct Transition {
-    pub state_index: usize,
-    pub action_type: SimulatedEntityActionType,
+    state_index: usize,
+    action_type: SimulatedEntityActionType,
 }
 
 pub struct EntityPlanner {
@@ -76,25 +77,30 @@ impl EntityPlanner {
                           plans: &[(i32, EntityPlan)], rng: &mut R) -> usize {
         self.states.clear();
         self.transitions.clear();
+
+        let goal_score = self.get_goal_score(&simulator, entity_properties);
+
         self.states.push(State {
             depth: 0,
             simulator,
             transition: None,
             open: false,
+            cost: 0,
         });
 
         let mut frontier: BinaryHeap<(i32, usize)> = BinaryHeap::new();
         frontier.push((0, 0));
 
-        let mut max_score = std::i32::MIN;
+        let mut min_cost = std::i32::MAX;
         let mut optimal_final_state_index = None;
         let mut transitions = 0;
 
-        while let Some((score, state_index)) = frontier.pop() {
+        while let Some((_, state_index)) = frontier.pop() {
             let depth = self.states[state_index].depth;
+            let cost = self.states[state_index].cost;
             if depth >= self.min_depth {
-                if max_score < score {
-                    max_score = score;
+                if min_cost > cost {
+                    min_cost = cost;
                     optimal_final_state_index = Some(state_index);
                 }
                 if depth >= self.max_depth {
@@ -129,7 +135,7 @@ impl EntityPlanner {
                 if transitions >= max_transitions {
                     break;
                 }
-                if let Some(transition) = self.add_transition(action_type, other_actions.clone(), state_index, entity_properties, rng) {
+                if let Some(transition) = self.add_transition(action_type, other_actions.clone(), state_index, goal_score, entity_properties, rng) {
                     frontier.push(transition);
                 }
                 transitions += 1;
@@ -139,7 +145,7 @@ impl EntityPlanner {
         self.optimal_final_state_index = optimal_final_state_index;
         self.plan = optimal_final_state_index
             .map(|state_index| EntityPlan {
-                score: max_score,
+                score: -min_cost,
                 transitions: self.reconstruct_sequence(state_index),
             })
             .unwrap_or_else(|| EntityPlan::default());
@@ -269,7 +275,7 @@ impl EntityPlanner {
     }
 
     fn add_transition<R: Rng>(&mut self, action_type: SimulatedEntityActionType, mut actions: Vec<SimulatedEntityAction>,
-                              state_index: usize, entity_properties: &Vec<EntityProperties>, rng: &mut R) -> Option<(i32, usize)> {
+                              state_index: usize, goal_score: i32, entity_properties: &Vec<EntityProperties>, rng: &mut R) -> Option<(i32, usize)> {
         let mut new_state = self.states[state_index].clone();
         new_state.depth += 1;
         actions.push(SimulatedEntityAction {
@@ -277,13 +283,14 @@ impl EntityPlanner {
             action_type: action_type.clone(),
         });
         new_state.simulator.simulate(entity_properties, &mut actions, rng);
-        let score = self.get_score(&new_state.simulator);
+        let transition_cost = self.get_cost(&self.states[state_index].simulator, &new_state.simulator, entity_properties);
+        let cost = self.states[state_index].cost + transition_cost;
         let new_state_index = if let Some((index, state)) = self.states.iter()
             .find_position(|state| {
                 (state.depth, state.simulator.players(), state.simulator.entities())
                     == (new_state.depth, new_state.simulator.players(), new_state.simulator.entities())
             }) {
-            if self.get_score(&state.simulator) >= score {
+            if state.cost <= cost {
                 return None;
             } else {
                 index
@@ -295,6 +302,7 @@ impl EntityPlanner {
             let transition_index = self.transitions.len();
             self.transitions.push(Transition { state_index, action_type });
             new_state.transition = Some(transition_index);
+            new_state.cost = cost;
             new_state.open = false;
             self.states.push(new_state);
         } else {
@@ -302,25 +310,93 @@ impl EntityPlanner {
             self.transitions[transition_index].state_index = state_index;
             self.transitions[transition_index].action_type = action_type;
             self.states[new_state_index].depth = new_state.depth;
+            self.states[new_state_index].cost = cost;
             self.states[new_state_index].simulator = new_state.simulator;
             if !self.states[new_state_index].open {
                 return None;
             }
             self.states[new_state_index].open = false;
         }
-        Some((score, new_state_index))
+        Some((goal_score - cost, new_state_index))
     }
 
-    fn get_score(&self, simulator: &EntitySimulator) -> i32 {
-        simulator.players().iter()
-            .map(|player| {
-                if player.id == self.player_id {
-                    player.score + player.damage_done - player.damage_received
-                } else {
-                    player.damage_received - player.damage_done - player.score
-                }
-            })
-            .sum()
+    fn get_goal_score(&self, simulator: &EntitySimulator, entity_properties: &Vec<EntityProperties>) -> i32 {
+        let my = simulator.entities().iter()
+            .filter(|entity| entity.player_id == Some(self.player_id))
+            .map(|entity| (
+                entity_properties[entity.entity_type.clone() as usize].destroy_score,
+                entity.health,
+            ))
+            .fold((0, 0), |r, v| (r.0 + v.0, r.1 + v.1));
+        let opponent = simulator.entities().iter()
+            .filter(|entity| entity.player_id.is_some() && entity.player_id != Some(self.player_id))
+            .map(|entity| (
+                entity_properties[entity.entity_type.clone() as usize].destroy_score,
+                entity.health,
+            ))
+            .fold((0, 0), |r, v| (r.0 + v.0, r.1 + v.1));
+        my.0 + my.1 + opponent.0 + opponent.1
+    }
+
+    fn get_cost(&self, src: &EntitySimulator, dst: &EntitySimulator, entity_properties: &Vec<EntityProperties>) -> i32 {
+        let mut my_score_gained = 0;
+        let mut opponent_score_gained = 0;
+        let mut my_damage_done = 0;
+        let mut opponent_damage_done = 0;
+        for i in 0..src.players().len() {
+            if src.players()[i].id == self.player_id {
+                my_score_gained += dst.players()[i].score - src.players()[i].score;
+                my_damage_done += dst.players()[i].damage_done - src.players()[i].damage_done;
+            } else {
+                opponent_score_gained += dst.players()[i].score - src.players()[i].score;
+                opponent_damage_done += dst.players()[i].damage_done - src.players()[i].damage_done;
+            };
+        }
+        let src_my = src.entities().iter()
+            .filter(|entity| entity.player_id == Some(self.player_id))
+            .map(|entity| (
+                entity_properties[entity.entity_type.clone() as usize].destroy_score,
+                entity.health,
+                entity_properties[entity.entity_type.clone() as usize].attack.as_ref().map(|v| v.damage).unwrap_or(0),
+            ))
+            .fold((0, 0, 0), |r, v| (r.0 + v.0, r.1 + v.1, r.2 + v.2));
+        let dst_my = dst.entities().iter()
+            .filter(|entity| entity.player_id == Some(self.player_id))
+            .map(|entity| (
+                entity_properties[entity.entity_type.clone() as usize].destroy_score,
+                entity.health,
+            ))
+            .fold((0, 0), |r, v| (r.0 + v.0, r.1 + v.1));
+        let my_destroy_score_saved = src_my.0 - dst_my.0;
+        let my_health_lost = src_my.1 - dst_my.1;
+        let src_opponent = src.entities().iter()
+            .filter(|entity| entity.player_id.is_some() && entity.player_id != Some(self.player_id))
+            .map(|entity| (
+                entity_properties[entity.entity_type.clone() as usize].destroy_score,
+                entity.health,
+                entity_properties[entity.entity_type.clone() as usize].attack.as_ref().map(|v| v.damage).unwrap_or(0),
+            ))
+            .fold((0, 0, 0), |r, v| (r.0 + v.0, r.1 + v.1, r.2 + v.2));
+        let dst_opponent = dst.entities().iter()
+            .filter(|entity| entity.player_id.is_some() && entity.player_id != Some(self.player_id))
+            .map(|entity| (
+                entity_properties[entity.entity_type.clone() as usize].destroy_score,
+                entity.health,
+            ))
+            .fold((0, 0), |r, v| (r.0 + v.0, r.1 + v.1));
+        let opponent_destroy_score_saved = src_opponent.0 - dst_opponent.0;
+        let opponent_health_lost = src_opponent.1 - dst_opponent.1;
+        let my_wasted_damage = src_my.2 - my_damage_done;
+        let opponent_wasted_damage = src_opponent.2 - opponent_damage_done;
+        0
+            - 10 * my_score_gained
+            + 10 * opponent_score_gained
+            + 10 * my_health_lost
+            - 10 * opponent_health_lost
+            - my_destroy_score_saved
+            + opponent_destroy_score_saved
+            + my_wasted_damage
+            - opponent_wasted_damage
     }
 
     fn reconstruct_sequence(&self, mut state_index: usize) -> Vec<SimulatedEntityActionType> {
@@ -406,9 +482,9 @@ mod tests {
         let world = new_world();
         let simulator = EntitySimulator::new(Rect::new(Vec2i::both(20), Vec2i::both(40)), &world);
         let mut rng = StdRng::seed_from_u64(42);
-        let mut planner = EntityPlanner::new(1, 1, 1, 4);
+        let mut planner = EntityPlanner::new(1, 1, 1, 17);
         let transitions = planner.update(world.map_size(), simulator, world.entity_properties(), 200, &[], &mut rng);
         assert!(!planner.plan().transitions.is_empty(), "iterations={}", transitions);
-        assert_eq!((planner.plan().score, transitions), (40, 200), "{:?}", planner.plan().transitions);
+        assert_eq!((planner.plan().score, transitions), (220, 200), "{:?}", planner.plan().transitions);
     }
 }

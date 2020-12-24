@@ -20,7 +20,7 @@ impl Config {
     pub fn new() -> Self {
         Self {
             entity_plan_min_depth: 1,
-            entity_plan_max_depth: 4,
+            entity_plan_max_depth: 17,
             entity_plan_max_transitions: 200,
             entity_plan_max_cost_per_tick: 100000,
             entity_plan_max_total_cost: 10000000,
