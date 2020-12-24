@@ -246,7 +246,7 @@ impl Bot {
         }
         if self.tasks.stats().build_ranged_base == 0
             && self.world.get_my_entity_count_of(&EntityType::RangedBase) == 0
-            && self.world.get_my_entity_count_of(&EntityType::House) >= 4 {
+            && self.world.get_my_entity_count_of(&EntityType::House) >= 5 {
             if self.world.my_resource() >= self.world.get_entity_cost(&EntityType::RangedBase) {
                 self.tasks.push_back(Task::build_building(EntityType::RangedBase));
             }
