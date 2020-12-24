@@ -393,10 +393,11 @@ impl Bot {
         if self.entity_planners.contains_key(&entity.id) {
             return None;
         }
-        if let Role::GroupMember { group_id } = &self.roles[&entity.id] {
-            return self.get_group_member_target(*group_id, entity, busy);
+        match self.roles[&entity.id] {
+            Role::GroupMember { group_id } => self.get_group_member_target(group_id, entity, busy),
+            Role::Scout => self.get_scout_target(entity),
+            _ => None,
         }
-        None
     }
 
     fn get_group_member_target(&self, group_id: u32, entity: &Entity, busy: &Vec<(i32, Vec2i)>) -> Option<Vec2i> {
@@ -435,6 +436,29 @@ impl Bot {
             }
         }
         None
+    }
+
+    fn get_scout_target(&self, entity: &Entity) -> Option<Vec2i> {
+        let mut candidates = Vec::new();
+        self.world.visit_map_square(Vec2i::zero(), self.world.map_size(), |position, tile, _| {
+            if !matches!(tile, Tile::Unknown) || self.world.is_attacked_by_opponents(position)
+                || !self.world.is_reachable_from_base(position) || !self.world.is_tile_cached(position) {
+                return;
+            }
+            let lifetime = self.world.get_tile_cache_lifetime(position);
+            let distance = entity.position().distance(position);
+            candidates.push((-lifetime, distance, position));
+        });
+        candidates.sort();
+        let properties = self.world.get_entity_properties(&entity.entity_type);
+        candidates.iter()
+            .find_map(|(_, _, position)| {
+                self.world.find_shortest_path_next_position(
+                    entity.position(),
+                    &Range::new(*position, properties.sight_range),
+                    true,
+                )
+            })
     }
 
     fn update_entity_plans(&mut self) {

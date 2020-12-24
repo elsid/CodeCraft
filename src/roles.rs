@@ -38,6 +38,7 @@ pub enum Role {
         resource_id: i32,
     },
     Fighter,
+    Scout,
 }
 
 impl Role {
@@ -51,7 +52,7 @@ impl Role {
             Role::GroupSupplier { .. } => build_unit(entity, world),
             Role::None => get_default_action(entity, world),
             Role::Cleaner { resource_id } => harvest_resource(entity, world, *resource_id),
-            Role::Fighter => fight(entity, world, None, entity_targets, entity_planners),
+            Role::Fighter | Role::Scout => fight(entity, world, None, entity_targets, entity_planners),
         }
     }
 
