@@ -332,7 +332,7 @@ impl BuildBuildingTask {
             }
         }
         self.builder_ids.retain(|v| world.contains_entity(*v));
-        let need = get_builders_count_for(world, &self.entity_type, roles, self.builder_ids.len(), self.building_id);
+        let need = get_builders_count_for(world, &self.entity_type, roles, self.builder_ids.len());
         if let (Some(position), None) = (self.position, self.building_id) {
             if !world.is_empty_square(position, properties.size) {
                 self.position = None;
@@ -422,15 +422,14 @@ impl BuildBuildingTask {
     }
 }
 
-fn get_builders_count_for(world: &World, entity_type: &EntityType, roles: &HashMap<i32, Role>, current: usize, building_id: Option<i32>) -> usize {
+fn get_builders_count_for(world: &World, entity_type: &EntityType, roles: &HashMap<i32, Role>, current: usize) -> usize {
     match entity_type {
         EntityType::Turret => 1,
         EntityType::Wall => 1,
         _ => {
             let properties = world.get_entity_properties(entity_type);
             let builder_properties = world.get_entity_properties(&EntityType::BuilderUnit);
-            let building_health = building_id.map(|v| world.get_entity(v).health).unwrap_or(0);
-            let base_time_to_build = (properties.initial_cost - building_health) as f32 / builder_properties.repair.as_ref().unwrap().power as f32;
+            let base_time_to_build = properties.max_health as f32 / builder_properties.repair.as_ref().unwrap().power as f32;
             let harvesters = roles.values().map(|v| matches!(v, Role::Harvester { .. })).count() + current;
             let builders = world.get_my_entity_count_of(&EntityType::BuilderUnit);
             let unit_cost = (
@@ -447,7 +446,7 @@ fn get_builders_count_for(world: &World, entity_type: &EntityType, roles: &HashM
             // base_time_to_build * harvesters / (population_provide * unit_cost / harvest_per_tick + base_time_to_build) >= max_builders
             let max_builders = (base_time_to_build * harvesters as f32)
                 / (base_time_to_build + properties.population_provide as f32 * unit_cost / harvest_per_tick as f32);
-            (max_builders.round() as usize).min(2 * properties.size as usize).min(builders / 2).min(harvesters / 2).max(1)
+            (max_builders.round() as usize).min(2 * properties.size as usize).min(builders / 2).max(3)
         }
     }
 }
