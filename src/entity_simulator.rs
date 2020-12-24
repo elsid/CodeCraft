@@ -374,12 +374,10 @@ impl EntitySimulator {
 
         if let Some(dst) = nearest_position_index {
             let mut first_position_index = None;
-            let success = visit_reversed_shortest_path(src_index, dst, &backtrack, |index| {
+            visit_reversed_shortest_path(src_index, dst, &backtrack, |index| {
                 first_position_index = Some(index);
             });
-            if success {
-                return first_position_index.map(|v| index_to_position(v, map_width) + self.shift());
-            }
+            return first_position_index.map(|v| index_to_position(v, map_width) + self.shift());
         }
 
         None

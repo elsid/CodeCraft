@@ -56,18 +56,17 @@ impl ReachabilityMap {
     }
 }
 
-pub fn visit_reversed_shortest_path<F: FnMut(usize)>(src: usize, dst: usize, backtrack: &Vec<usize>, mut visit: F) -> bool {
+pub fn visit_reversed_shortest_path<F: FnMut(usize)>(src: usize, dst: usize, backtrack: &Vec<usize>, mut visit: F) {
+    if src == dst {
+        return;
+    }
     let mut index = dst;
     loop {
         let prev = backtrack[index];
-        if prev == index {
-            return false;
-        }
         visit(index);
         if prev == src {
             break;
         }
         index = prev;
     }
-    true
 }
