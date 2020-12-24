@@ -294,6 +294,7 @@ def get_stats(games):
     places_positions = defaultdict(lambda: defaultdict(lambda: {v: 0 for v in players}))
     seeds = set()
     scores = {v: list() for v in players}
+    scores_dynamic = {v: list() for v in players}
     places_dynamic = {v: list() for v in players}
     positions_dynamic = {v: list() for v in players}
     wins_dynamic = {v: list() for v in players}
@@ -302,7 +303,7 @@ def get_stats(games):
     bot_stats = defaultdict(lambda: {v: list() for v in players})
     for number, game in enumerate(games):
         for player in players:
-            scores[player].append(0)
+            scores_dynamic[player].append(0)
             positions_dynamic[player].append(0)
             places_dynamic[player].append(0)
             wins_dynamic[player].append(0)
@@ -336,7 +337,8 @@ def get_stats(games):
         for k, v in game['results'].items():
             if v['crashed']:
                 crashes[k] += 1
-            scores[k][-1] = v['score']
+            scores[k].append(v['score'])
+            scores_dynamic[k][-1] = v['score']
             positions[v['position']][k] += 1
             positions_dynamic[k][-1] = v['position']
             games_count[k] += 1
@@ -349,6 +351,7 @@ def get_stats(games):
                     bot_stats[k][player].append(v)
     for k in scores.keys():
         scores[k] = numpy.array(scores[k])
+        scores_dynamic[k] = numpy.array(scores_dynamic[k])
         places_dynamic[k] = numpy.array(places_dynamic[k])
     return dict(
         total_games=len(games),
@@ -379,8 +382,8 @@ def get_stats(games):
         min_score={k: min(v) for k, v in scores.items()},
         max_score={k: max(v) for k, v in scores.items()},
         q95_score={k: numpy.quantile(v, 0.95) for k, v in scores.items()},
-        scores_dynamic=scores,
-        scores_dynamic_cumsum=cumsums(scores),
+        scores_dynamic=scores_dynamic,
+        scores_dynamic_cumsum=cumsums(scores_dynamic),
         places_dynamic=places_dynamic,
         places_dynamic_cumsum=cumsums(places_dynamic),
         wins_dynamic=wins_dynamic,
