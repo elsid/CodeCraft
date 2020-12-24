@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 use model::{
     Entity,
@@ -11,7 +11,7 @@ use model::{
 #[cfg(feature = "enable_debug")]
 use model::Color;
 
-use crate::my_strategy::{Config, index_to_position, is_entity_base, is_entity_unit, Map, position_to_index, Positionable, ReachabilityMap, Rect, Stats, Tile, Vec2i, visit_neighbour, visit_range, visit_reversed_shortest_path, visit_square};
+use crate::my_strategy::{Config, FindPathTarget, is_entity_base, is_entity_unit, Map, PathFinder, position_to_index, Positionable, ReachabilityMap, Rect, Stats, Tile, Vec2i, visit_neighbour, visit_range, visit_square};
 #[cfg(feature = "enable_debug")]
 use crate::my_strategy::debug;
 
@@ -45,6 +45,7 @@ pub struct World {
     predicted_map_resource: f32,
     is_passable: Vec<bool>,
     harvest_positions: Vec<Vec2i>,
+    paths: RefCell<Vec<PathFinder>>,
     moves: RefCell<Vec<(Vec2i, Vec2i)>>,
     config: Config,
     #[cfg(feature = "enable_debug")]
@@ -105,6 +106,7 @@ impl World {
             predicted_map_resource: 0.0,
             is_passable: Vec::new(),
             harvest_positions: Vec::new(),
+            paths: RefCell::new(Vec::new()),
             moves: RefCell::new(Vec::new()),
             config,
             #[cfg(feature = "enable_debug")]
@@ -282,6 +284,7 @@ impl World {
             }
         });
         self.harvest_positions = harvest_positions.into_iter().collect();
+        self.paths.borrow_mut().clear();
         self.moves.borrow_mut().clear();
         #[cfg(feature = "enable_debug")]
         for i in 0..self.players.len() {
@@ -595,7 +598,9 @@ impl World {
     }
 
     pub fn add_move(&self, src: Vec2i, dst: Vec2i) {
-        self.moves.borrow_mut().push((src, dst));
+        if !matches!(self.get_tile_entity_type(self.get_tile(dst)), Some(EntityType::Resource)) {
+            self.moves.borrow_mut().push((src, dst));
+        }
     }
 
     pub fn lock_square(&self, position: Vec2i, size: i32) {
@@ -627,6 +632,9 @@ impl World {
                     *v.get_mut() += 1;
                 }
             }
+        }
+        for path in self.paths.borrow().iter() {
+            path.debug_update(debug);
         }
         debug.add_static_text(format!("Map resource: {} k + {} p = {}", self.known_map_resource, self.predicted_map_resource, self.known_map_resource as f32 + self.predicted_map_resource));
         debug.add_static_text(format!("Max required builders: {}", self.get_max_required_builders_count()));
@@ -759,98 +767,34 @@ impl World {
         None
     }
 
-    pub fn find_shortest_path_next_position<T: FindPathTarget>(&self, src: Vec2i, target: &T, find_nearest: bool) -> Option<Vec2i> {
-        self.find_shortest_path_next_position_and_cost(src, target, find_nearest)
+    pub fn find_shortest_path_next_position<T: FindPathTarget>(&self, start: Vec2i, target: &T, find_nearest: bool, damage: i32) -> Option<Vec2i> {
+        self.find_shortest_path_next_position_and_cost(start, target, find_nearest, damage)
             .map(|(v, _)| v)
     }
 
-    pub fn find_shortest_path_next_position_and_cost<T: FindPathTarget>(&self, src: Vec2i, target: &T, find_nearest: bool) -> Option<(Vec2i, i32)> {
-        let bounds = self.bounds();
-        let size = self.map_size as usize;
-
-        let mut open: Vec<bool> = std::iter::repeat(true)
-            .take(size * size)
-            .collect();
-        let mut costs: Vec<i32> = std::iter::repeat(std::i32::MAX)
-            .take(size * size)
-            .collect();
-        let mut backtrack: Vec<usize> = (0..(size * size)).into_iter().collect();
-        let mut discovered = BinaryHeap::new();
-
-        let src_index = position_to_index(src, size);
-
-        costs[src_index] = 0;
-        discovered.push((-target.get_distance(src), src_index));
-
-        const EDGES: &[Vec2i] = &[
-            Vec2i::only_x(1),
-            Vec2i::only_x(-1),
-            Vec2i::only_y(1),
-            Vec2i::only_y(-1),
-        ];
-
-        let mut nearest_position_index = None;
-        let mut min_distance = std::i32::MAX;
-
-        while let Some((_, node_index)) = discovered.pop() {
-            let node_position = index_to_position(node_index, size);
-            let reached = target.has_reached(node_position);
-            let distance = target.get_distance(node_position);
-            if reached || min_distance > distance && find_nearest {
-                min_distance = distance;
-                nearest_position_index = Some(node_index);
-                if reached {
-                    break;
-                }
-            }
-            open[node_index] = true;
-            for &shift in EDGES.iter() {
-                let neighbour_position = node_position + shift;
-                if !bounds.contains(neighbour_position) || self.is_tile_locked(neighbour_position) {
-                    continue;
-                }
-                match self.get_tile(neighbour_position) {
-                    Tile::Entity(entity_id) => {
-                        let entity = self.get_entity(entity_id);
-                        match &entity.entity_type {
-                            EntityType::BuilderUnit | EntityType::MeleeUnit | EntityType::RangedUnit => {
-                                if !self.moves.borrow().iter().any(|(src, _)| *src == entity.position()) {
-                                    continue;
-                                }
-                            },
-                            _ => continue,
-                        }
-                    },
-                    _ => (),
-                }
-                if self.moves.borrow().iter().any(|(_, dst)| *dst == neighbour_position) {
-                    continue;
-                }
-                let new_cost = costs[node_index] + 1;
-                let neighbour_index = position_to_index(neighbour_position, size);
-                if costs[neighbour_index] <= new_cost {
-                    continue;
-                }
-                costs[neighbour_index] = new_cost;
-                backtrack[neighbour_index] = node_index;
-                if !open[neighbour_index] {
-                    continue;
-                }
-                open[neighbour_index] = false;
-                let new_score = new_cost + target.get_distance(neighbour_position);
-                discovered.push((-new_score, neighbour_index));
-            }
+    pub fn find_shortest_path_next_position_and_cost<T: FindPathTarget>(&self, start: Vec2i, target: &T, find_nearest: bool, damage: i32) -> Option<(Vec2i, i32)> {
+        if target.has_reached(start) {
+            return Some((start, 0));
         }
-
-        if let Some(dst) = nearest_position_index {
-            let mut first_position_index = None;
-            visit_reversed_shortest_path(src_index, dst, &backtrack, |index| {
-                first_position_index = Some(index);
-            });
-            return first_position_index.map(|v| (index_to_position(v, size), costs[dst]));
+        let mut path = PathFinder::new(start, self.map_size as usize);
+        path.find_with_a_star(target, find_nearest, damage, self);
+        if path.path().is_empty() {
+            return None;
         }
-
+        if let Some(cost) = path.cost() {
+            let result = Some((path.path()[0], cost));
+            self.paths.borrow_mut().push(path);
+            return result;
+        }
         None
+    }
+
+    pub fn has_move_from(&self, position: Vec2i) -> bool {
+        self.moves.borrow().iter().any(|(src, _)| *src == position)
+    }
+
+    pub fn has_move_to(&self, position: Vec2i) -> bool {
+        self.moves.borrow().iter().any(|(_, dst)| *dst == position)
     }
 
     pub fn is_player_alive(&self, player_id: i32) -> bool {
@@ -900,12 +844,6 @@ impl World {
     pub fn harvest_positions(&self) -> &Vec<Vec2i> {
         &self.harvest_positions
     }
-}
-
-pub trait FindPathTarget {
-    fn has_reached(&self, position: Vec2i) -> bool;
-
-    fn get_distance(&self, position: Vec2i) -> i32;
 }
 
 pub fn is_protected_entity_type(entity_type: &EntityType) -> bool {

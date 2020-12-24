@@ -90,7 +90,8 @@ fn harvest_resource(entity: &Entity, world: &World, resource_id: i32) -> EntityA
         build_action: None,
         repair_action: None,
         move_action: if resource.position().distance(entity.position()) > 1 {
-            get_target_position_nearby(entity.position(), resource.position(), 1, world)
+            let damage = world.get_entity_properties(&entity.entity_type).attack.as_ref().map(|v| v.damage).unwrap_or(0);
+            get_target_position_nearby(entity.position(), resource.position(), 1, damage, world)
                 .map(|next| MoveAction {
                     target: next.as_model(),
                     break_through: true,
@@ -157,7 +158,8 @@ fn build_unit(base: &Entity, world: &World) -> EntityAction {
 
 fn build_building(builder: &Entity, world: &World, position: Vec2i, entity_type: &EntityType) -> EntityAction {
     let size = world.get_entity_properties(entity_type).size;
-    get_target_position_nearby(builder.position(), position, size, world)
+    let damage = world.get_entity_properties(&builder.entity_type).attack.as_ref().map(|v| v.damage).unwrap_or(0);
+    get_target_position_nearby(builder.position(), position, size, damage, world)
         .map(|target| EntityAction {
             attack_action: None,
             build_action: if target == builder.position() {
@@ -172,7 +174,7 @@ fn build_building(builder: &Entity, world: &World, position: Vec2i, entity_type:
             move_action: Some(MoveAction {
                 target: target.as_model(),
                 find_closest_position: false,
-                break_through: false,
+                break_through: true,
             }),
         })
         .unwrap_or_else(get_idle_action)
@@ -185,7 +187,8 @@ fn repair_building(builder: &Entity, world: &World, base_id: i32, need_resources
     }
     let base = world.get_entity(base_id);
     let size = world.get_entity_properties(&base.entity_type).size;
-    get_target_position_nearby(builder.position(), base.position(), size, world)
+    let damage = world.get_entity_properties(&builder.entity_type).attack.as_ref().map(|v| v.damage).unwrap_or(0);
+    get_target_position_nearby(builder.position(), base.position(), size, damage, world)
         .map(|target| {
             EntityAction {
                 attack_action: None,
@@ -198,19 +201,19 @@ fn repair_building(builder: &Entity, world: &World, base_id: i32, need_resources
                 move_action: Some(MoveAction {
                     target: target.as_model(),
                     find_closest_position: true,
-                    break_through: false,
+                    break_through: true,
                 }),
             }
         })
         .unwrap_or_else(get_idle_action)
 }
 
-fn get_target_position_nearby(position: Vec2i, target: Vec2i, size: i32, world: &World) -> Option<Vec2i> {
+fn get_target_position_nearby(position: Vec2i, target: Vec2i, size: i32, damage: i32, world: &World) -> Option<Vec2i> {
     let bounds = Rect::new(target, target + Vec2i::both(size));
     if bounds.distance_to_position(position) == 1 {
         return Some(position);
     }
-    if let Some(next) = world.find_shortest_path_next_position(position, &SizedRange::new(target, size, 1), false) {
+    if let Some(next) = world.find_shortest_path_next_position(position, &SizedRange::new(target, size, 1), false, damage) {
         world.add_move(position, next);
         Some(next)
     } else {
@@ -250,7 +253,7 @@ fn assist_group(unit: &Entity, world: &World, group: &Group, entity_targets: &Ha
             move_action: Some(MoveAction {
                 target: world.get_entity(repair.target).position.clone(),
                 find_closest_position: true,
-                break_through: false,
+                break_through: true,
             }),
             repair_action: Some(repair),
         };

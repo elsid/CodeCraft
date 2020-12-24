@@ -257,7 +257,8 @@ pub fn repair_buildings(world: &World, roles: &mut HashMap<i32, Role>) {
                 if target.contains(entity.position()) {
                     return Some((0, entity.id));
                 }
-                world.find_shortest_path_next_position_and_cost(entity.position(), &target, false)
+                let damage = world.get_entity_properties(&entity.entity_type).attack.as_ref().map(|v| v.damage).unwrap_or(0);
+                world.find_shortest_path_next_position_and_cost(entity.position(), &target, false, damage)
                     .map(|(_, cost)| (cost, entity.id))
             })
             .collect();
@@ -271,9 +272,6 @@ pub fn repair_buildings(world: &World, roles: &mut HashMap<i32, Role>) {
             }
             _ => 1,
         };
-        while candidates.len() > need {
-            candidates.pop();
-        }
         for i in 0..candidates.len().min(need) {
             let builder_id = candidates[i].1;
             harvesters -= matches!(roles[&builder_id], Role::Harvester { .. }) as usize;
@@ -385,7 +383,8 @@ impl BuildBuildingTask {
                     if target.contains(entity.position()) {
                         return Some((0, entity.id));
                     }
-                    world.find_shortest_path_next_position_and_cost(entity.position(), &target, false)
+                    let damage = world.get_entity_properties(&entity.entity_type).attack.as_ref().map(|v| v.damage).unwrap_or(0);
+                    world.find_shortest_path_next_position_and_cost(entity.position(), &target, false, damage)
                         .map(|(_, cost)| (cost, entity.id))
                 })
                 .collect();
