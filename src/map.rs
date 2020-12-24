@@ -20,7 +20,7 @@ pub struct Map {
     size: usize,
     tiles: Vec<Tile>,
     locked: Vec<bool>,
-    cached: Vec<bool>,
+    cached: Vec<i32>,
 }
 
 impl Map {
@@ -29,7 +29,7 @@ impl Map {
             size,
             tiles: repeat(Tile::Unknown).take(size * size).collect(),
             locked: repeat(false).take(size * size).collect(),
-            cached: repeat(false).take(size * size).collect(),
+            cached: repeat(0).take(size * size).collect(),
         }
     }
 
@@ -43,7 +43,9 @@ impl Map {
         }
         if fog_of_war {
             for value in self.cached.iter_mut() {
-                *value = true;
+                if *value < std::i32::MAX {
+                    *value += 1;
+                }
             }
         }
         for entity in entities.iter() {
@@ -52,7 +54,7 @@ impl Map {
             visit_square(entity.position(), size, |position| {
                 let index = position_to_index(position, map_size);
                 self.tiles[index] = Tile::Entity(entity.id);
-                self.cached[index] = false;
+                self.cached[index] = 0;
             });
         }
         if fog_of_war {
@@ -66,7 +68,7 @@ impl Map {
                         match self.tiles[index] {
                             Tile::Unknown => {
                                 self.tiles[index] = Tile::Empty;
-                                self.cached[index] = false;
+                                self.cached[index] = 0;
                             }
                             _ => (),
                         }
@@ -109,6 +111,10 @@ impl Map {
     }
 
     pub fn is_tile_cached(&self, position: Vec2i) -> bool {
+        self.cached[self.get_tile_index(position)] > 0
+    }
+
+    pub fn get_tile_cache_lifetime(&self, position: Vec2i) -> i32 {
         self.cached[self.get_tile_index(position)]
     }
 
@@ -229,6 +235,7 @@ impl Map {
 
     #[cfg(feature = "enable_debug")]
     pub fn debug_update(&self, debug: &mut debug::Debug) {
+        let max_cache_lifetime = self.cached.iter().max().cloned().unwrap() as f32;
         for i in 0..self.tiles.len() {
             let position = index_to_position(i, self.size);
             let color = match self.tiles[i] {
@@ -248,6 +255,13 @@ impl Map {
                     Vec2f::from(position) + Vec2f::new(0.25, 0.25),
                     0.5,
                     Color { a: 0.5, r: 0.5, g: 0.0, b: 0.0 },
+                );
+            }
+            if self.cached[i] > 0 {
+                debug.add_world_square(
+                    Vec2f::from(position),
+                    1.0,
+                    Color { a: 0.5 * self.cached[i] as f32 / max_cache_lifetime, r: 0.0, g: 0.0, b: 0.0 },
                 );
             }
         }
