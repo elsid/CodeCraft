@@ -39,7 +39,7 @@ def print_stats(stats):
 def generate_stats_rows(stats):
     for metric, value in stats.items():
         if isinstance(value, int):
-            yield metric, value, value / stats['games'] * 100
+            yield metric, value, value / stats['total_games'] * 100
         if isinstance(value, float):
             yield metric, value, ''
 
@@ -285,6 +285,7 @@ def get_stats(games):
     zero_draws = 0
     fails = 0
     durations = list()
+    games_count = {v: 0 for v in players}
     wins = {v: 0 for v in players}
     losses = {v: 0 for v in players}
     places = defaultdict(lambda: {v: 0 for v in players})
@@ -306,6 +307,7 @@ def get_stats(games):
             places_dynamic[player].append(0)
             wins_dynamic[player].append(0)
             losses_dynamic[player].append(0)
+
         fails += game['code'] != 0
         durations.append(game['duration'])
         game_scores = numpy.array(sorted(v['score'] for v in game['results'].values()))
@@ -337,6 +339,7 @@ def get_stats(games):
             scores[k][-1] = v['score']
             positions[v['position']][k] += 1
             positions_dynamic[k][-1] = v['position']
+            games_count[k] += 1
         seeds.add(game['seed'])
         for player, data in game.get('stats', dict()).items():
             for k, v in data.items():
@@ -348,7 +351,7 @@ def get_stats(games):
         scores[k] = numpy.array(scores[k])
         places_dynamic[k] = numpy.array(places_dynamic[k])
     return dict(
-        games=len(games),
+        total_games=len(games),
         draws=draws,
         zero_draws=zero_draws,
         fails=fails,
@@ -359,6 +362,7 @@ def get_stats(games):
         max_duration=max(durations),
         durations=durations,
         players=sorted(players),
+        games=games_count,
         wins=wins,
         losses=losses,
         places=places,
