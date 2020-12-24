@@ -98,7 +98,10 @@ impl World {
             player_power: std::iter::repeat(0).take(player_view.players.len()).collect(),
             is_attacked_by_opponent: std::iter::repeat(false).take((player_view.map_size * player_view.map_size) as usize).collect(),
             last_player_activity: std::iter::repeat(player_view.current_tick).take(player_view.players.len()).collect(),
-            base_center: Vec2i::zero(),
+            base_center: player_view.entities.iter()
+                .find(|entity| entity.player_id == Some(player_view.my_id) && matches!(entity.entity_type, EntityType::BuilderUnit))
+                .map(|entity| entity.position())
+                .unwrap(),
             reachability_map: RefCell::new(ReachabilityMap::new(player_view.map_size as usize)),
             known_map_resource: 0,
             predicted_map_resource: 0.0,
@@ -227,12 +230,25 @@ impl World {
                 });
             }
         }
-        let base_center = if !matches!(self.map.borrow().get_tile(self.base_center), Tile::Empty) {
+        let mut is_passable: Vec<bool> = std::iter::repeat(true)
+            .take((self.map_size * self.map_size) as usize)
+            .collect();
+        for entity in self.entities.iter() {
+            match &entity.entity_type {
+                EntityType::BuilderUnit | EntityType::MeleeUnit | EntityType::RangedUnit => continue,
+                _ => (),
+            }
+            let size = self.get_entity_properties(&entity.entity_type).size;
+            visit_square(entity.position(), size, |position| {
+                is_passable[position_to_index(position, self.map_size as usize)] = false;
+            });
+        }
+        let base_center = if !is_passable[position_to_index(self.base_center, self.map_size as usize)] {
             let mut base_center = None;
             let mut min_distance_to_start = std::i32::MAX;
             let mut min_distance_to_center = std::i32::MAX;
-            visit_range(self.start_position, 1, self.protected_radius, &self.bounds(), |position| {
-                if !matches!(self.map.borrow().get_tile(position), Tile::Empty) {
+            visit_range(self.base_center, 1, self.protected_radius, &self.bounds(), |position| {
+                if !is_passable[position_to_index(position, self.map_size as usize)] {
                     return;
                 }
                 let distance_to_start = self.start_position.distance(position);
@@ -247,19 +263,6 @@ impl World {
         } else {
             self.base_center
         };
-        let mut is_passable: Vec<bool> = std::iter::repeat(true)
-            .take((self.map_size * self.map_size) as usize)
-            .collect();
-        for entity in self.entities.iter() {
-            match &entity.entity_type {
-                EntityType::BuilderUnit | EntityType::MeleeUnit | EntityType::RangedUnit => continue,
-                _ => (),
-            }
-            let size = self.get_entity_properties(&entity.entity_type).size;
-            visit_square(entity.position(), size, |position| {
-                is_passable[position_to_index(position, self.map_size as usize)] = false;
-            });
-        }
         if self.base_center != base_center || self.is_passable != is_passable {
             stats.add_path_updates(1);
             self.reachability_map.borrow_mut().update(base_center, &is_passable);
