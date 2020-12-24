@@ -235,22 +235,6 @@ impl Bot {
 
     fn try_play_opening_for_round2(&mut self) -> bool {
         if self.world.current_tick() == 0 {
-            {
-                let shift_x = if self.world.grow_direction().x() > 0 {
-                    0
-                } else {
-                    -self.world.get_entity_properties(&EntityType::House).size
-                };
-                let shift_y = if self.world.grow_direction().y() > 0 {
-                    0
-                } else {
-                    -self.world.get_entity_properties(&EntityType::House).size
-                };
-                self.tasks.push_back(Task::clear_area(
-                    self.world.start_position() + Vec2i::new(shift_x, shift_y),
-                    self.world.get_entity_properties(&EntityType::House).size,
-                ));
-            }
             self.tasks.push_back(Task::build_units(
                 EntityType::BuilderUnit,
                 (self.world.population_provide() - self.world.population_use()) as usize,
