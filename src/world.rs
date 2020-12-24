@@ -753,11 +753,11 @@ impl World {
     }
 
     pub fn find_shortest_path_next_position<T: FindPathTarget>(&self, src: Vec2i, target: &T, find_nearest: bool) -> Option<Vec2i> {
-        self.find_shortest_path_next_position_and_distance(src, target, find_nearest)
+        self.find_shortest_path_next_position_and_cost(src, target, find_nearest)
             .map(|(v, _)| v)
     }
 
-    pub fn find_shortest_path_next_position_and_distance<T: FindPathTarget>(&self, src: Vec2i, target: &T, find_nearest: bool) -> Option<(Vec2i, i32)> {
+    pub fn find_shortest_path_next_position_and_cost<T: FindPathTarget>(&self, src: Vec2i, target: &T, find_nearest: bool) -> Option<(Vec2i, i32)> {
         let bounds = self.bounds();
         let size = self.map_size as usize;
 
@@ -828,7 +828,7 @@ impl World {
                 first_position_index = Some(index);
             });
             if success {
-                return first_position_index.map(|v| (index_to_position(v, size), min_distance));
+                return first_position_index.map(|v| (index_to_position(v, size), costs[dst]));
             }
         }
 

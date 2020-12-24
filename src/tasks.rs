@@ -257,8 +257,8 @@ pub fn repair_buildings(world: &World, roles: &mut HashMap<i32, Role>) {
                 if target.contains(entity.position()) {
                     return Some((0, entity.id));
                 }
-                world.find_shortest_path_next_position_and_distance(entity.position(), &target, false)
-                    .map(|(_, distance)| (distance, entity.id))
+                world.find_shortest_path_next_position_and_cost(entity.position(), &target, false)
+                    .map(|(_, cost)| (cost, entity.id))
             })
             .collect();
         if candidates.is_empty() {
@@ -385,8 +385,8 @@ impl BuildBuildingTask {
                     if target.contains(entity.position()) {
                         return Some((0, entity.id));
                     }
-                    world.find_shortest_path_next_position_and_distance(entity.position(), &target, false)
-                        .map(|(_, distance)| (distance, entity.id))
+                    world.find_shortest_path_next_position_and_cost(entity.position(), &target, false)
+                        .map(|(_, cost)| (cost, entity.id))
                 })
                 .collect();
             candidates.sort();
