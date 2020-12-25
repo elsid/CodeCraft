@@ -227,7 +227,7 @@ impl Bot {
             || self.world.get_my_entity_count_of(&EntityType::RangedUnit) == 0 {
             return true;
         }
-        if self.world.my_resource() >= self.world.get_entity_cost(&EntityType::House) {
+        if self.tasks.stats().build_house == 0 && self.world.my_resource() >= self.world.get_entity_cost(&EntityType::House) {
             self.tasks.push_back(Task::build_building(EntityType::House));
         }
         false
