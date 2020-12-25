@@ -217,18 +217,26 @@ impl Bot {
                 need.insert(EntityType::RangedUnit, ranged_units);
             }
             if !need.is_empty() {
-                self.gather_group(need);
+                self.gather_group(need.clone());
             }
-            self.tasks.push_back(Task::build_units(EntityType::BuilderUnit, (self.world.population_provide() - self.world.population_use()) as usize));
+            self.tasks.push_back(Task::build_units(EntityType::BuilderUnit, (self.world.population_provide() - self.world.population_use() - 2) as usize));
+            self.gather_group(need);
         }
-        if self.world.get_my_entity_count_of(&EntityType::RangedBase) == 0
-            || self.world.get_my_units_count() >= 15
-            || self.world.get_my_entity_count_of(&EntityType::MeleeUnit) == 0
-            || self.world.get_my_entity_count_of(&EntityType::RangedUnit) == 0 {
+        if self.world.current_tick() > 100
+            || self.world.get_my_entity_count_of(&EntityType::House) >= 1 {
             return true;
         }
         if self.tasks.stats().build_house == 0 && self.world.my_resource() >= self.world.get_entity_cost(&EntityType::House) {
             self.tasks.push_back(Task::build_building(EntityType::House));
+            let mut need = HashMap::new();
+            if self.world.my_ranged_bases().any(|v| v.active) {
+                need.insert(EntityType::RangedUnit, 4);
+            } else if self.world.my_melee_bases().any(|v| v.active) {
+                need.insert(EntityType::MeleeUnit, 1);
+            }
+            if !need.is_empty() {
+                self.gather_group(need);
+            }
         }
         false
     }
