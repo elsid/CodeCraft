@@ -275,11 +275,12 @@ impl EntityPlanner {
         let transition_index = self.transitions.len();
         self.transitions.push(Transition { state_index, action_type: action_type.clone() });
         self.states[new_state_index].depth += 1;
+        actions.shuffle(rng);
         actions.push(SimulatedEntityAction {
             entity_id: self.entity_id,
             action_type,
         });
-        self.states[new_state_index].simulator.simulate(entity_properties, &mut actions, rng);
+        self.states[new_state_index].simulator.simulate(entity_properties, &mut actions);
         let transition_cost = self.get_cost(&self.states[state_index].simulator, &self.states[new_state_index].simulator);
         let cost = self.states[state_index].cost + transition_cost;
         self.states[new_state_index].transition = Some(transition_index);
